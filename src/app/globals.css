@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+}
+
+/* Próximo evento a acontecer: anel pulsante (efeito piscando) */
+@keyframes nextPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.9);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(250, 204, 21, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
+}
+.is-next {
+  animation: nextPulse 1.3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Calendário do react-datepicker acima do modal */
+.react-datepicker-popper {
+  z-index: 50;
+}
+
+/* Faixa de rolagem discreta para a grade */
+.grid-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.grid-scroll::-webkit-scrollbar-thumb {
+  @apply bg-brand-300 rounded;
+}
+.grid-scroll::-webkit-scrollbar-track {
+  @apply bg-slate-200;
+}

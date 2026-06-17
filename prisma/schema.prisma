@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Papéis (texto, compatível com SQLite e Postgres):
+//   ADMIN   — gerencia tudo, inclusive usuários; recebe os emails de aviso
+//   MANAGER — gerencia salas e eventos
+//   VIEWER  — apenas visualiza a grade
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("VIEWER")
+  // Se ADMIN, controla se recebe os emails de aviso de evento.
+  notify    Boolean  @default(true)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[] @relation("EventCreator")
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  location  String?
+  capacity  Int?
+  color     String   @default("#1d4ed8")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime
+  roomId      String
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?    @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  // Marca se o email de aviso de "evento prestes a começar" já foi enviado.
+  notifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([roomId, startAt])
+  @@index([startAt])
+}

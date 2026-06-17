@@ -1,0 +1,60 @@
+// Schema de DESENVOLVIMENTO LOCAL (SQLite).
+// Os modelos são idênticos ao schema.prisma de produção (Postgres);
+// só muda o provider. Use com:
+//   npx prisma generate --schema prisma/schema.dev.prisma
+//   npx prisma db push  --schema prisma/schema.dev.prisma
+// (DATABASE_URL deve ser algo como "file:./dev.db")
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("VIEWER")
+  notify    Boolean  @default(true)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[] @relation("EventCreator")
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  location  String?
+  capacity  Int?
+  color     String   @default("#1d4ed8")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime
+  roomId      String
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?     @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  notifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([roomId, startAt])
+  @@index([startAt])
+}
