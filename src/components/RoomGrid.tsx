@@ -44,13 +44,29 @@ function startOfWeek(d: Date): Date {
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
+function atTime(base: Date, h: number, m: number): Date {
+  const d = new Date(base);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+type CreatePrefill = { roomId?: string; start: Date; end: Date };
+type CForm = {
+  title: string;
+  roomId: string;
+  startAt: Date;
+  endAt: Date;
+  description: string;
+};
 function hhmm(s: string): string {
   return new Date(s).toLocaleTimeString("pt-PT", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
-const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+// Dias úteis exibidos (domingo removido): segunda a sábado.
+const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const DAYS_SHOWN = WEEKDAYS.length; // 6
 
 // Regra do semáforo para os blocos de evento (ordem de prioridade, inclui cor do texto):
 //  - encerrado (já terminou): CINZA (texto escuro)
@@ -91,6 +107,19 @@ export default function RoomGrid() {
   const [clock, setClock] = useState("");
   const [nowTs, setNowTs] = useState(() => Date.now());
   const firstLoad = useRef(true);
+
+  // Criação de evento via clique na grade
+  const [canManage, setCanManage] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [cForm, setCForm] = useState<CForm>({
+    title: "",
+    roomId: "",
+    startAt: new Date(),
+    endAt: new Date(),
+    description: "",
+  });
+  const [cSaving, setCSaving] = useState(false);
+  const [cError, setCError] = useState<string | null>(null);
 
   const ref = useMemo(() => new Date(`${date}T12:00:00`), [date]);
 
@@ -165,6 +194,50 @@ export default function RoomGrid() {
     }
     return new Set([...best.values()].map((v) => v.id));
   }, [events, nowTs]);
+
+  // Permissão para criar eventos (ADMIN/MANAGER)
+  useEffect(() => {
+    api<{ user: { role: string } }>("/api/auth/me")
+      .then((r) => setCanManage(["ADMIN", "MANAGER"].includes(r.user.role)))
+      .catch(() => {});
+  }, []);
+
+  function openCreate(prefill: CreatePrefill) {
+    if (!canManage || rooms.length === 0) return;
+    setCForm({
+      title: "",
+      roomId: prefill.roomId || rooms[0]?.id || "",
+      startAt: prefill.start,
+      endAt: prefill.end,
+      description: "",
+    });
+    setCError(null);
+    setCreateOpen(true);
+  }
+
+  async function saveCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCSaving(true);
+    setCError(null);
+    try {
+      await api("/api/events", {
+        method: "POST",
+        body: JSON.stringify({
+          title: cForm.title,
+          roomId: cForm.roomId,
+          startAt: cForm.startAt.toISOString(),
+          endAt: cForm.endAt.toISOString(),
+          description: cForm.description || null,
+        }),
+      });
+      setCreateOpen(false);
+      await load();
+    } catch (err) {
+      setCError((err as Error).message);
+    } finally {
+      setCSaving(false);
+    }
+  }
 
   // Sincroniza com a saída de tela cheia via Esc.
   useEffect(() => {
@@ -259,6 +332,8 @@ export default function RoomGrid() {
         todayStr={todayStr}
         nextEventIds={nextEventIds}
         nowTs={nowTs}
+        onCreate={openCreate}
+        canManage={canManage}
       />
     ) : view === "week" ? (
       <WeekView
@@ -270,6 +345,8 @@ export default function RoomGrid() {
         todayStr={todayStr}
         nextEventIds={nextEventIds}
         nowTs={nowTs}
+        onCreate={openCreate}
+        canManage={canManage}
       />
     ) : (
       <MonthView
@@ -284,6 +361,8 @@ export default function RoomGrid() {
         todayStr={todayStr}
         nextEventIds={nextEventIds}
         nowTs={nowTs}
+        onCreate={openCreate}
+        canManage={canManage}
       />
     );
 
@@ -332,6 +411,17 @@ export default function RoomGrid() {
         </div>
         <div className="flex-1 min-h-0">{body}</div>
         {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
+        {createOpen && (
+          <CreateEventModal
+            form={cForm}
+            setForm={setCForm}
+            rooms={rooms}
+            onSubmit={saveCreate}
+            onClose={() => setCreateOpen(false)}
+            saving={cSaving}
+            error={cError}
+          />
+        )}
       </div>
     );
   }
@@ -414,6 +504,17 @@ export default function RoomGrid() {
       {body}
 
       {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
+      {createOpen && (
+        <CreateEventModal
+          form={cForm}
+          setForm={setCForm}
+          rooms={rooms}
+          onSubmit={saveCreate}
+          onClose={() => setCreateOpen(false)}
+          saving={cSaving}
+          error={cError}
+        />
+      )}
     </div>
   );
 }
@@ -437,6 +538,8 @@ function DayView({
   todayStr,
   nextEventIds,
   nowTs,
+  onCreate,
+  canManage,
 }: {
   date: string;
   rooms: Room[];
@@ -446,6 +549,8 @@ function DayView({
   todayStr: string;
   nextEventIds: Set<string>;
   nowTs: number;
+  onCreate: (p: CreatePrefill) => void;
+  canManage: boolean;
 }) {
   const [nowMin, setNowMin] = useState<number | null>(null);
 
@@ -534,7 +639,25 @@ function DayView({
                     </span>
                   </div>
                   <div
-                    className={`relative flex-1 bg-green-100 ${kiosk ? "" : "h-24"}`}
+                    onClick={(e) => {
+                      if (!canManage) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const frac = Math.max(
+                        0,
+                        Math.min(0.999, (e.clientX - rect.left) / rect.width)
+                      );
+                      const startMin = Math.floor((frac * TOTAL_MIN) / 60) * 60;
+                      const start = new Date(dayStart.getTime() + startMin * 60000);
+                      onCreate({
+                        roomId: room.id,
+                        start,
+                        end: new Date(start.getTime() + 60 * 60000),
+                      });
+                    }}
+                    title={canManage ? "Clique para marcar evento" : undefined}
+                    className={`relative flex-1 bg-green-100 ${
+                      canManage ? "cursor-pointer" : ""
+                    } ${kiosk ? "" : "h-24"}`}
                   >
                     <div className="absolute inset-0 flex pointer-events-none">
                       {HOURS.map((h) => (
@@ -558,7 +681,10 @@ function DayView({
                       return (
                         <button
                           key={ev.id}
-                          onClick={() => onSelect(ev)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelect(ev);
+                          }}
                           title={`${ev.title} (${hhmm(ev.startAt)}–${hhmm(ev.endAt)})`}
                           className={`absolute rounded-md ${eventClasses(
                             ev,
@@ -598,6 +724,8 @@ function WeekView({
   todayStr,
   nextEventIds,
   nowTs,
+  onCreate,
+  canManage,
 }: {
   weekStart: Date;
   rooms: Room[];
@@ -607,8 +735,10 @@ function WeekView({
   todayStr: string;
   nextEventIds: Set<string>;
   nowTs: number;
+  onCreate: (p: CreatePrefill) => void;
+  canManage: boolean;
 }) {
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const days = Array.from({ length: DAYS_SHOWN }, (_, i) => addDays(weekStart, i));
 
   const byCell = useMemo(() => {
     const map = new Map<string, EventItem[]>();
@@ -691,9 +821,18 @@ function WeekView({
                     return (
                       <div
                         key={i}
+                        onClick={() =>
+                          canManage &&
+                          onCreate({
+                            roomId: room.id,
+                            start: atTime(d, 8, 0),
+                            end: atTime(d, 9, 0),
+                          })
+                        }
+                        title={canManage ? "Clique para marcar evento" : undefined}
                         className={`flex-1 min-w-0 border-l border-slate-100 p-1.5 space-y-1 ${
-                          isToday ? "bg-brand-50/40" : ""
-                        }`}
+                          canManage ? "cursor-pointer hover:bg-slate-50/60" : ""
+                        } ${isToday ? "bg-brand-50/40" : ""}`}
                       >
                         {evs.length === 0 ? (
                           <div className="h-full min-h-[44px] rounded bg-green-100" />
@@ -701,7 +840,10 @@ function WeekView({
                           evs.map((ev) => (
                             <button
                               key={ev.id}
-                              onClick={() => onSelect(ev)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelect(ev);
+                              }}
                               title={`${ev.title} (${hhmm(ev.startAt)}–${hhmm(ev.endAt)})`}
                               className={`block w-full rounded ${eventClasses(
                                 ev,
@@ -740,6 +882,8 @@ function MonthView({
   todayStr,
   nextEventIds,
   nowTs,
+  onCreate,
+  canManage,
 }: {
   refDate: Date;
   events: EventItem[];
@@ -749,9 +893,17 @@ function MonthView({
   todayStr: string;
   nextEventIds: Set<string>;
   nowTs: number;
+  onCreate: (p: CreatePrefill) => void;
+  canManage: boolean;
 }) {
-  const gridStart = startOfWeek(startOfMonth(refDate));
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const gridStart = startOfWeek(startOfMonth(refDate)); // segunda-feira
+  // 6 semanas × 6 dias (segunda a sábado), pulando os domingos.
+  const cells: Date[] = [];
+  for (let w = 0; w < 6; w++) {
+    for (let di = 0; di < DAYS_SHOWN; di++) {
+      cells.push(addDays(gridStart, w * 7 + di));
+    }
+  }
   const month = refDate.getMonth();
 
   const byDay = useMemo(() => {
@@ -771,7 +923,7 @@ function MonthView({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full flex flex-col">
-      <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+      <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-200">
         {WEEKDAYS.map((w) => (
           <div
             key={w}
@@ -783,7 +935,7 @@ function MonthView({
           </div>
         ))}
       </div>
-      <div className={`grid grid-cols-7 ${kiosk ? "flex-1 grid-rows-6" : ""}`}>
+      <div className={`grid grid-cols-6 ${kiosk ? "flex-1 grid-rows-6" : ""}`}>
         {cells.map((d, i) => {
           const inMonth = d.getMonth() === month;
           const dStr = ymd(d);
@@ -792,12 +944,22 @@ function MonthView({
           return (
             <div
               key={i}
-              className={`min-w-0 overflow-hidden border-b border-l border-slate-100 p-1.5 [&:nth-child(7n)]:border-r-0 ${
-                kiosk ? "min-h-0" : "min-h-[104px]"
-              } ${inMonth ? "bg-white" : "bg-slate-50/60"}`}
+              onClick={() =>
+                canManage &&
+                onCreate({ start: atTime(d, 8, 0), end: atTime(d, 9, 0) })
+              }
+              title={canManage ? "Clique para marcar evento" : undefined}
+              className={`min-w-0 overflow-hidden border-b border-l border-slate-100 p-1.5 [&:nth-child(6n)]:border-r-0 ${
+                canManage ? "cursor-pointer hover:bg-brand-50/40" : ""
+              } ${kiosk ? "min-h-0" : "min-h-[104px]"} ${
+                inMonth ? "bg-white" : "bg-slate-50/60"
+              }`}
             >
               <button
-                onClick={() => onPickDay(dStr)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickDay(dStr);
+                }}
                 className={`mb-1 flex items-center justify-center rounded-full transition hover:bg-brand-100 ${
                   kiosk ? "h-8 w-8 text-sm" : "h-6 w-6 text-xs"
                 } ${
@@ -815,7 +977,10 @@ function MonthView({
                 {evs.slice(0, MAX).map((ev) => (
                   <button
                     key={ev.id}
-                    onClick={() => onSelect(ev)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(ev);
+                    }}
                     title={`${ev.title} · ${ev.room.name} (${hhmm(ev.startAt)})`}
                     className={`block w-full text-left rounded ${eventClasses(
                       ev,
@@ -832,7 +997,10 @@ function MonthView({
                 ))}
                 {evs.length > MAX && (
                   <button
-                    onClick={() => onPickDay(dStr)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPickDay(dStr);
+                    }}
                     className={`text-brand-600 hover:underline pl-1 ${
                       kiosk ? "text-xs" : "text-[10px]"
                     }`}
@@ -845,6 +1013,160 @@ function MonthView({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------ MODAL DE CRIAÇÃO -------------------------------- */
+function CreateEventModal({
+  form,
+  setForm,
+  rooms,
+  onSubmit,
+  onClose,
+  saving,
+  error,
+}: {
+  form: CForm;
+  setForm: React.Dispatch<React.SetStateAction<CForm>>;
+  rooms: Room[];
+  onSubmit: (e: React.FormEvent) => void;
+  onClose: () => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <form
+        onSubmit={onSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl shadow-xl max-w-md w-full"
+      >
+        <div className="bg-navy text-white px-5 py-4 font-bold rounded-t-2xl">
+          Novo evento
+        </div>
+        <div className="p-5 space-y-3">
+          {error && (
+            <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
+              {error}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Título *
+            </label>
+            <input
+              required
+              autoFocus
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              className="input-rg"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Sala *
+            </label>
+            <select
+              required
+              value={form.roomId}
+              onChange={(e) => setForm({ ...form, roomId: e.target.value })}
+              className="input-rg"
+            >
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Início *
+              </label>
+              <DatePicker
+                selected={form.startAt}
+                onChange={(d: Date | null) => {
+                  if (!d) return;
+                  const end =
+                    form.endAt <= d ? new Date(d.getTime() + 60 * 60000) : form.endAt;
+                  setForm({ ...form, startAt: d, endAt: end });
+                }}
+                showTimeSelect
+                timeIntervals={15}
+                timeCaption="Hora"
+                dateFormat="dd/MM/yyyy HH:mm"
+                locale="pt-BR"
+                className="input-rg"
+                wrapperClassName="w-full"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Fim *
+              </label>
+              <DatePicker
+                selected={form.endAt}
+                onChange={(d: Date | null) => d && setForm({ ...form, endAt: d })}
+                showTimeSelect
+                timeIntervals={15}
+                timeCaption="Hora"
+                minDate={form.startAt}
+                dateFormat="dd/MM/yyyy HH:mm"
+                locale="pt-BR"
+                className="input-rg"
+                wrapperClassName="w-full"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Descrição
+            </label>
+            <textarea
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              className="input-rg"
+            />
+          </div>
+        </div>
+        <div className="px-5 pb-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium text-slate-700"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
+          >
+            {saving ? "Salvando…" : "Salvar"}
+          </button>
+        </div>
+      </form>
+      <style jsx global>{`
+        .input-rg {
+          width: 100%;
+          border-radius: 0.5rem;
+          border: 1px solid #cbd5e1;
+          padding: 0.5rem 0.75rem;
+          outline: none;
+          background: white;
+          color: #0f172a;
+        }
+        .input-rg:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 2px #bfdbfe;
+        }
+      `}</style>
     </div>
   );
 }
