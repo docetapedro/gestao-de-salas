@@ -51,9 +51,12 @@ model Event {
   createdBy   User?    @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
   // Marca se o email de aviso de "evento prestes a começar" já foi enviado.
   notifiedAt  DateTime?
+  // Agrupa ocorrências de um evento recorrente (mesma série).
+  seriesId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([roomId, startAt])
   @@index([startAt])
+  @@index([seriesId])
 }

@@ -51,12 +51,15 @@ function atTime(base: Date, h: number, m: number): Date {
 }
 
 type CreatePrefill = { roomId?: string; start: Date; end: Date };
+type Repeat = "none" | "daily" | "weekly" | "monthly";
 type CForm = {
   title: string;
   roomId: string;
   startAt: Date;
   endAt: Date;
   description: string;
+  repeat: Repeat;
+  repeatUntil: Date | null;
 };
 function hhmm(s: string): string {
   return new Date(s).toLocaleTimeString("pt-PT", {
@@ -117,6 +120,8 @@ export default function RoomGrid() {
     startAt: new Date(),
     endAt: new Date(),
     description: "",
+    repeat: "none",
+    repeatUntil: null,
   });
   const [cSaving, setCSaving] = useState(false);
   const [cError, setCError] = useState<string | null>(null);
@@ -210,6 +215,8 @@ export default function RoomGrid() {
       startAt: prefill.start,
       endAt: prefill.end,
       description: "",
+      repeat: "none",
+      repeatUntil: null,
     });
     setCError(null);
     setCreateOpen(true);
@@ -217,21 +224,38 @@ export default function RoomGrid() {
 
   async function saveCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (cForm.repeat !== "none" && !cForm.repeatUntil) {
+      setCError("Informe a data limite da repetição");
+      return;
+    }
     setCSaving(true);
     setCError(null);
     try {
-      await api("/api/events", {
-        method: "POST",
-        body: JSON.stringify({
-          title: cForm.title,
-          roomId: cForm.roomId,
-          startAt: cForm.startAt.toISOString(),
-          endAt: cForm.endAt.toISOString(),
-          description: cForm.description || null,
-        }),
-      });
+      const res = await api<{ created?: number; skipped?: number }>(
+        "/api/events",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: cForm.title,
+            roomId: cForm.roomId,
+            startAt: cForm.startAt.toISOString(),
+            endAt: cForm.endAt.toISOString(),
+            description: cForm.description || null,
+            repeat: cForm.repeat,
+            repeatUntil: cForm.repeatUntil
+              ? cForm.repeatUntil.toISOString()
+              : null,
+          }),
+        }
+      );
       setCreateOpen(false);
       await load();
+      if (cForm.repeat !== "none" && res.created !== undefined) {
+        alert(
+          `Série criada: ${res.created} evento(s).` +
+            (res.skipped ? ` ${res.skipped} ignorado(s) por conflito.` : "")
+        );
+      }
     } catch (err) {
       setCError((err as Error).message);
     } finally {
@@ -1133,6 +1157,49 @@ function CreateEventModal({
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               className="input-rg"
             />
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Repetir
+              </label>
+              <select
+                value={form.repeat}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    repeat: e.target.value as Repeat,
+                    repeatUntil:
+                      e.target.value === "none" ? null : form.repeatUntil,
+                  })
+                }
+                className="input-rg"
+              >
+                <option value="none">Não repete</option>
+                <option value="daily">Diariamente (seg–sáb)</option>
+                <option value="weekly">Semanalmente</option>
+                <option value="monthly">Mensalmente</option>
+              </select>
+            </div>
+            {form.repeat !== "none" && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Repetir até *
+                </label>
+                <DatePicker
+                  selected={form.repeatUntil}
+                  onChange={(d: Date | null) =>
+                    setForm({ ...form, repeatUntil: d })
+                  }
+                  dateFormat="dd/MM/yyyy"
+                  locale="pt-BR"
+                  minDate={form.startAt}
+                  placeholderText="dd/mm/aaaa"
+                  className="input-rg"
+                  wrapperClassName="w-full"
+                />
+              </div>
+            )}
           </div>
         </div>
         <div className="px-5 pb-5 flex gap-2">

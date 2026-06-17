@@ -53,6 +53,8 @@ const emptyForm = () => {
     roomId: "",
     startAt: now as Date,
     endAt: later as Date,
+    repeat: "none" as "none" | "daily" | "weekly" | "monthly",
+    repeatUntil: null as Date | null,
   };
 };
 
@@ -165,6 +167,8 @@ export default function EventosPage() {
       roomId: ev.room.id,
       startAt: new Date(ev.startAt),
       endAt: new Date(ev.endAt),
+      repeat: "none",
+      repeatUntil: null,
     });
     setShowForm(true);
     setError(null);
@@ -172,29 +176,53 @@ export default function EventosPage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.id && form.repeat !== "none" && !form.repeatUntil) {
+      setError("Informe a data limite da repetição");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        title: form.title,
-        description: form.description || null,
-        roomId: form.roomId,
-        startAt: form.startAt.toISOString(),
-        endAt: form.endAt.toISOString(),
-      };
       if (form.id) {
         await api(`/api/events/${form.id}`, {
           method: "PUT",
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            title: form.title,
+            description: form.description || null,
+            roomId: form.roomId,
+            startAt: form.startAt.toISOString(),
+            endAt: form.endAt.toISOString(),
+          }),
         });
+        setShowForm(false);
+        await load();
       } else {
-        await api("/api/events", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        const res = await api<{ created?: number; skipped?: number }>(
+          "/api/events",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              title: form.title,
+              description: form.description || null,
+              roomId: form.roomId,
+              startAt: form.startAt.toISOString(),
+              endAt: form.endAt.toISOString(),
+              repeat: form.repeat,
+              repeatUntil: form.repeatUntil
+                ? form.repeatUntil.toISOString()
+                : null,
+            }),
+          }
+        );
+        setShowForm(false);
+        await load();
+        if (form.repeat !== "none" && res.created !== undefined) {
+          alert(
+            `Série criada: ${res.created} evento(s).` +
+              (res.skipped ? ` ${res.skipped} ignorado(s) por conflito.` : "")
+          );
+        }
       }
-      setShowForm(false);
-      await load();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -522,6 +550,51 @@ export default function EventosPage() {
                   className="input"
                 />
               </div>
+              {!form.id && (
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Repetir
+                    </label>
+                    <select
+                      value={form.repeat}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          repeat: e.target.value as typeof form.repeat,
+                          repeatUntil:
+                            e.target.value === "none" ? null : form.repeatUntil,
+                        })
+                      }
+                      className="input"
+                    >
+                      <option value="none">Não repete</option>
+                      <option value="daily">Diariamente (seg–sáb)</option>
+                      <option value="weekly">Semanalmente</option>
+                      <option value="monthly">Mensalmente</option>
+                    </select>
+                  </div>
+                  {form.repeat !== "none" && (
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Repetir até *
+                      </label>
+                      <DatePicker
+                        selected={form.repeatUntil}
+                        onChange={(d: Date | null) =>
+                          setForm({ ...form, repeatUntil: d })
+                        }
+                        dateFormat="dd/MM/yyyy"
+                        locale="pt-BR"
+                        minDate={form.startAt}
+                        placeholderText="dd/mm/aaaa"
+                        className="input"
+                        wrapperClassName="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="px-5 pb-5 flex gap-2">
               <button

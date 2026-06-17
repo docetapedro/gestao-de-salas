@@ -52,9 +52,11 @@ model Event {
   createdById String?
   createdBy   User?     @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
   notifiedAt  DateTime?
+  seriesId    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([roomId, startAt])
   @@index([startAt])
+  @@index([seriesId])
 }

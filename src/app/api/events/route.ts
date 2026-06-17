@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertAuthenticated, assertCanManage } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { findConflict } from "@/lib/events";
+import { randomUUID } from "crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -75,31 +76,110 @@ export async function POST(req: NextRequest) {
     if (endAt <= startAt)
       return json({ error: "O fim deve ser depois do início" }, 400);
 
-    const conflict = await findConflict(roomId, startAt, endAt);
-    if (conflict) {
-      return json(
-        {
-          error: `Conflito com o evento "${conflict.title}" nesta sala nesse horário`,
-        },
-        409
-      );
+    const description = body.description ? String(body.description).trim() : null;
+    const repeat: string = body.repeat || "none";
+
+    // --- Evento único ---
+    if (repeat === "none") {
+      const conflict = await findConflict(roomId, startAt, endAt);
+      if (conflict) {
+        return json(
+          {
+            error: `Conflito com o evento "${conflict.title}" nesta sala nesse horário`,
+          },
+          409
+        );
+      }
+      const event = await prisma.event.create({
+        data: { title, description, roomId, startAt, endAt, createdById: session.sub },
+        include: { room: { select: { id: true, name: true, color: true } } },
+      });
+      return json({ event }, 201);
     }
 
-    const event = await prisma.event.create({
-      data: {
+    // --- Evento recorrente (agendamento periódico) ---
+    if (!["daily", "weekly", "monthly"].includes(repeat)) {
+      return json({ error: "Tipo de repetição inválido" }, 400);
+    }
+    const until = body.repeatUntil ? new Date(body.repeatUntil) : null;
+    if (!until || isNaN(until.getTime())) {
+      return json({ error: "Informe a data limite da repetição" }, 400);
+    }
+    until.setHours(23, 59, 59, 999);
+    if (until.getTime() < startAt.getTime()) {
+      return json({ error: "A data limite deve ser depois do início" }, 400);
+    }
+
+    const occ = buildOccurrences(startAt, endAt, repeat, until);
+    if (occ.length === 0) {
+      return json({ error: "Nenhuma ocorrência no período informado" }, 400);
+    }
+
+    const seriesId = randomUUID();
+    const toCreate = [];
+    let skipped = 0;
+    for (const o of occ) {
+      const conflict = await findConflict(roomId, o.start, o.end);
+      if (conflict) {
+        skipped++;
+        continue;
+      }
+      toCreate.push({
         title,
-        description: body.description ? String(body.description).trim() : null,
+        description,
         roomId,
-        startAt,
-        endAt,
+        startAt: o.start,
+        endAt: o.end,
         createdById: session.sub,
-      },
-      include: {
-        room: { select: { id: true, name: true, color: true } },
-      },
-    });
-    return json({ event }, 201);
+        seriesId,
+      });
+    }
+    if (toCreate.length > 0) {
+      await prisma.event.createMany({ data: toCreate });
+    }
+    return json(
+      { created: toCreate.length, skipped, total: occ.length, seriesId },
+      201
+    );
   } catch (err) {
     return handleError(err);
   }
+}
+
+// Soma n meses preservando o dia (com clamp para meses mais curtos).
+function addMonthsKeepDay(base: Date, n: number): Date {
+  const d = new Date(base.getFullYear(), base.getMonth(), 1);
+  d.setMonth(d.getMonth() + n);
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(base.getDate(), daysInMonth));
+  d.setHours(base.getHours(), base.getMinutes(), 0, 0);
+  return d;
+}
+
+// Gera as ocorrências de uma série até a data limite (máx. 366).
+function buildOccurrences(
+  start: Date,
+  end: Date,
+  repeat: string,
+  until: Date
+): { start: Date; end: Date }[] {
+  const durMs = end.getTime() - start.getTime();
+  const out: { start: Date; end: Date }[] = [];
+  const MAX = 366;
+  for (let i = 0; i < MAX; i++) {
+    let s: Date;
+    if (repeat === "daily") {
+      s = new Date(start);
+      s.setDate(start.getDate() + i);
+    } else if (repeat === "weekly") {
+      s = new Date(start);
+      s.setDate(start.getDate() + i * 7);
+    } else {
+      s = addMonthsKeepDay(start, i);
+    }
+    if (s.getTime() > until.getTime()) break;
+    if (repeat === "daily" && s.getDay() === 0) continue; // pula domingo
+    out.push({ start: s, end: new Date(s.getTime() + durMs) });
+  }
+  return out;
 }
