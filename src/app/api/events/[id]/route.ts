@@ -61,12 +61,28 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     assertCanManage(await getSession());
     const { id } = await params;
+    const series = new URL(req.url).searchParams.get("series");
+
+    // Excluir a série inteira (todas as ocorrências com o mesmo seriesId).
+    if (series === "1" || series === "true") {
+      const ev = await prisma.event.findUnique({
+        where: { id },
+        select: { seriesId: true },
+      });
+      if (ev?.seriesId) {
+        const r = await prisma.event.deleteMany({
+          where: { seriesId: ev.seriesId },
+        });
+        return json({ ok: true, deleted: r.count });
+      }
+    }
+
     await prisma.event.delete({ where: { id } });
-    return json({ ok: true });
+    return json({ ok: true, deleted: 1 });
   } catch (err) {
     return handleError(err);
   }

@@ -36,6 +36,7 @@ type EventItem = {
   endAt: string;
   room: { id: string; name: string; color: string };
   createdBy: { id: string; name: string } | null;
+  seriesId: string | null;
 };
 
 const PAGE_SIZE = 10;
@@ -240,6 +241,25 @@ export default function EventosPage() {
     }
   }
 
+  async function removeSeries(ev: EventItem) {
+    if (
+      !confirm(
+        `Excluir TODA a série de "${ev.title}"? Todas as ocorrências (passadas e futuras) serão removidas.`
+      )
+    )
+      return;
+    try {
+      const r = await api<{ deleted: number }>(
+        `/api/events/${ev.id}?series=1`,
+        { method: "DELETE" }
+      );
+      await load();
+      alert(`Série removida: ${r.deleted} ocorrência(s).`);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
   function fmt(s: string) {
     return new Date(s).toLocaleString("pt-PT", {
       day: "2-digit",
@@ -370,6 +390,14 @@ export default function EventosPage() {
                   <tr key={ev.id} className="border-t border-slate-100">
                     <td className="px-4 py-3 font-medium text-slate-800">
                       {ev.title}
+                      {ev.seriesId && (
+                        <span
+                          className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-brand-100 text-brand-700 align-middle"
+                          title="Faz parte de uma série recorrente"
+                        >
+                          ↻ série
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2 text-slate-600">
@@ -403,6 +431,14 @@ export default function EventosPage() {
                         >
                           Excluir
                         </button>
+                        {ev.seriesId && (
+                          <button
+                            onClick={() => removeSeries(ev)}
+                            className="text-red-700 font-medium hover:underline ml-3"
+                          >
+                            Excluir série
+                          </button>
+                        )}
                       </td>
                     )}
                   </tr>
