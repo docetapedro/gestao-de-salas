@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { BuildingIcon } from "@/components/icons";
 
 export default function LoginPage() {
   return (
@@ -45,13 +44,12 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-navy via-navy-light to-brand-700 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-soft text-navy shadow-lg">
-            <BuildingIcon className="h-7 w-7" />
-          </div>
-          <h1 className="mt-4 text-2xl font-bold text-white">Gestão de Salas</h1>
-          <p className="text-brand-200 text-sm">
-            Ocupação de salas em tempo real
-          </p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/Logo.png"
+            alt="Gestão de Salas"
+            className="mx-auto h-20 w-auto"
+          />
         </div>
 
         <form
@@ -73,7 +71,7 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"
-              placeholder="admin@salas.local"
+              placeholder="seu@email.com"
             />
           </div>
           <div>
@@ -97,10 +95,6 @@ function LoginForm() {
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-
-        <p className="text-center text-brand-200 text-xs mt-4">
-          Padrão inicial: admin@salas.local / admin123
-        </p>
       </div>
     </div>
   );

@@ -52,10 +52,11 @@ function hhmm(s: string): string {
 }
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-// Regra do semáforo para os blocos de evento (inclui a cor do texto):
+// Regra do semáforo para os blocos de evento (ordem de prioridade, inclui cor do texto):
 //  - encerrado (já terminou): CINZA (texto escuro)
+//  - ocupada AGORA (em curso): VERMELHO (texto branco)
 //  - próximo a acontecer (de cada sala): AMARELO + anel pulsante (texto escuro)
-//  - ocupada/reservada (em curso ou futuro): VERMELHO (texto branco)
+//  - agendado (futuro, ainda não começou): AZUL (texto branco)
 //  (as horas livres aparecem em VERDE no fundo da grade)
 function eventClasses(
   ev: EventItem,
@@ -63,13 +64,18 @@ function eventClasses(
   nextEventIds: Set<string>,
   nowTs: number
 ): string {
-  if (new Date(ev.endAt).getTime() < nowTs) {
-    return "bg-slate-300 hover:bg-slate-400 text-slate-600";
+  const start = new Date(ev.startAt).getTime();
+  const end = new Date(ev.endAt).getTime();
+  if (end < nowTs) {
+    return "bg-slate-300 hover:bg-slate-400 text-slate-600"; // encerrado
+  }
+  if (start <= nowTs && nowTs < end) {
+    return "bg-red-600 hover:bg-red-700 text-white"; // ocupada agora
   }
   if (nextEventIds.has(ev.id)) {
-    return "bg-yellow-400 hover:bg-yellow-500 text-slate-900 is-next ring-2 ring-yellow-300";
+    return "bg-yellow-400 hover:bg-yellow-500 text-slate-900 is-next ring-2 ring-yellow-300"; // a seguir
   }
-  return "bg-red-600 hover:bg-red-700 text-white";
+  return "bg-blue-600 hover:bg-blue-700 text-white"; // agendado (futuro)
 }
 
 /* --------------------------------- componente --------------------------------- */
@@ -287,7 +293,7 @@ export default function RoomGrid() {
       <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col p-4 sm:p-6">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-navy">Ocupação de Salas</h1>
+            <h1 className="text-3xl font-extrabold text-navy">Academia TIS</h1>
             <p className="text-lg text-slate-500 capitalize">{periodLabel}</p>
           </div>
           <div className="flex items-center gap-5">
@@ -301,11 +307,14 @@ export default function RoomGrid() {
                   <span className="inline-block h-3 w-3 rounded bg-green-400" /> livre
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded bg-red-600" /> ocupada
+                  <span className="inline-block h-3 w-3 rounded bg-red-600" /> ocupada agora
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="is-next inline-block h-3 w-3 rounded bg-yellow-400 ring-2 ring-yellow-300" />{" "}
                   a seguir
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded bg-blue-600" /> agendado
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="inline-block h-3 w-3 rounded bg-slate-300" /> encerrado
@@ -332,18 +341,20 @@ export default function RoomGrid() {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Grade de Ocupação</h1>
+          <h1 className="text-2xl font-bold text-navy">Agenda de Ocupação</h1>
           <p className="text-sm text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>Atualiza a cada 15s</span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded bg-green-400" /> livre
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded bg-red-600" /> ocupada
+              <span className="inline-block h-3 w-3 rounded bg-red-600" /> ocupada agora
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="is-next inline-block h-3 w-3 rounded bg-yellow-400 ring-2 ring-yellow-300" />{" "}
               a seguir
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded bg-blue-600" /> agendado
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded bg-slate-300" /> encerrado
@@ -680,7 +691,7 @@ function WeekView({
                     return (
                       <div
                         key={i}
-                        className={`flex-1 border-l border-slate-100 p-1.5 space-y-1 ${
+                        className={`flex-1 min-w-0 border-l border-slate-100 p-1.5 space-y-1 ${
                           isToday ? "bg-brand-50/40" : ""
                         }`}
                       >
@@ -781,7 +792,7 @@ function MonthView({
           return (
             <div
               key={i}
-              className={`border-b border-l border-slate-100 p-1.5 [&:nth-child(7n)]:border-r-0 ${
+              className={`min-w-0 overflow-hidden border-b border-l border-slate-100 p-1.5 [&:nth-child(7n)]:border-r-0 ${
                 kiosk ? "min-h-0" : "min-h-[104px]"
               } ${inMonth ? "bg-white" : "bg-slate-50/60"}`}
             >

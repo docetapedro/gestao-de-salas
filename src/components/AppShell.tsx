@@ -6,10 +6,10 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
 import {
-  BuildingIcon,
   CalendarIcon,
   DoorIcon,
   GridIcon,
+  KeyIcon,
   LogoutIcon,
   MenuIcon,
   PanelLeftIcon,
@@ -24,7 +24,7 @@ type User = {
 };
 
 const NAV = [
-  { href: "/dashboard", label: "Grade", Icon: GridIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
+  { href: "/dashboard", label: "Agenda", Icon: GridIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
   { href: "/eventos", label: "Eventos", Icon: CalendarIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
   { href: "/salas", label: "Salas", Icon: DoorIcon, roles: ["ADMIN", "MANAGER"] },
   { href: "/usuarios", label: "Usuários", Icon: UsersIcon, roles: ["ADMIN"] },
@@ -43,6 +43,46 @@ export default function AppShell({
   const router = useRouter();
   const [open, setOpen] = useState(false); // drawer no mobile
   const [collapsed, setCollapsed] = useState(false); // recolhido no desktop
+
+  // Alterar a própria senha
+  const [showPwd, setShowPwd] = useState(false);
+  const [pwd, setPwd] = useState({ current: "", next: "", confirm: "" });
+  const [pwdSaving, setPwdSaving] = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
+  const [pwdOk, setPwdOk] = useState(false);
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwdError(null);
+    if (pwd.next !== pwd.confirm) {
+      setPwdError("A confirmação não coincide com a nova senha");
+      return;
+    }
+    setPwdSaving(true);
+    try {
+      await api("/api/auth/password", {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: pwd.current,
+          newPassword: pwd.next,
+        }),
+      });
+      setPwdOk(true);
+      setPwd({ current: "", next: "", confirm: "" });
+    } catch (err) {
+      setPwdError((err as Error).message);
+    } finally {
+      setPwdSaving(false);
+    }
+  }
+
+  function openPwd() {
+    setPwd({ current: "", next: "", confirm: "" });
+    setPwdError(null);
+    setPwdOk(false);
+    setShowPwd(true);
+    setOpen(false);
+  }
 
   // Restaura a preferência de recolhido.
   useEffect(() => {
@@ -76,21 +116,24 @@ export default function AppShell({
           collapsed ? "lg:w-20" : "lg:w-64"
         } ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
-        <div className="px-3 py-5 border-b border-white/10 flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-xl bg-sky-soft text-navy flex items-center justify-center">
-            <BuildingIcon className="h-5 w-5" />
-          </div>
-          <div className={`min-w-0 ${hideOnCollapse}`}>
-            <div className="font-bold leading-tight truncate">Gestão de Salas</div>
-            <div className="text-[11px] text-brand-200">tempo real</div>
+        <div
+          className={`px-3 py-4 border-b border-white/10 flex items-center gap-2 ${
+            collapsed ? "lg:justify-center" : ""
+          }`}
+        >
+          <div className={`flex-1 min-w-0 ${hideOnCollapse}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Logo.png"
+              alt="Gestão de Salas"
+              className="h-11 w-full object-contain object-left"
+            />
           </div>
           {/* Botão recolher (desktop) */}
           <button
             onClick={toggleCollapsed}
             title={collapsed ? "Expandir menu" : "Recolher menu"}
-            className={`ml-auto hidden lg:flex h-7 w-7 items-center justify-center rounded-lg text-brand-100 hover:bg-white/10 transition ${
-              collapsed ? "lg:mx-auto lg:ml-0" : ""
-            }`}
+            className="ml-auto hidden lg:flex shrink-0 h-7 w-7 items-center justify-center rounded-lg text-brand-100 hover:bg-white/10 transition"
           >
             <PanelLeftIcon className="h-4 w-4" />
           </button>
@@ -129,6 +172,16 @@ export default function AppShell({
             </div>
           </div>
           <button
+            onClick={openPwd}
+            title="Alterar senha"
+            className={`w-full px-3 py-2 rounded-lg text-sm text-brand-100 hover:bg-white/10 transition flex items-center gap-2 ${
+              collapsed ? "lg:justify-center lg:px-0" : "text-left"
+            }`}
+          >
+            <KeyIcon className="h-5 w-5 shrink-0" />
+            <span className={hideOnCollapse}>Alterar senha</span>
+          </button>
+          <button
             onClick={logout}
             title="Sair"
             className={`w-full mt-1 px-3 py-2 rounded-lg text-sm text-brand-100 hover:bg-white/10 transition flex items-center gap-2 ${
@@ -158,6 +211,98 @@ export default function AppShell({
         </header>
         <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">{children}</main>
       </div>
+
+      {/* Modal: alterar a própria senha */}
+      {showPwd && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPwd(false)}
+        >
+          <form
+            onSubmit={changePassword}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full"
+          >
+            <div className="bg-navy text-white px-5 py-4 font-bold rounded-t-2xl">
+              Alterar senha
+            </div>
+            <div className="p-5 space-y-3">
+              {pwdOk ? (
+                <div className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 border border-green-200">
+                  Senha alterada com sucesso.
+                </div>
+              ) : (
+                <>
+                  {pwdError && (
+                    <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
+                      {pwdError}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Senha atual
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={pwd.current}
+                      onChange={(e) =>
+                        setPwd({ ...pwd, current: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nova senha
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={pwd.next}
+                      onChange={(e) => setPwd({ ...pwd, next: e.target.value })}
+                      placeholder="mín. 6 caracteres"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Confirmar nova senha
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={pwd.confirm}
+                      onChange={(e) =>
+                        setPwd({ ...pwd, confirm: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="px-5 pb-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPwd(false)}
+                className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium text-slate-700"
+              >
+                {pwdOk ? "Fechar" : "Cancelar"}
+              </button>
+              {!pwdOk && (
+                <button
+                  type="submit"
+                  disabled={pwdSaving}
+                  className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
+                >
+                  {pwdSaving ? "Salvando…" : "Salvar"}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

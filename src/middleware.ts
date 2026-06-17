@@ -32,6 +32,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protege tudo exceto assets, _next e as rotas de API (a API valida sozinha).
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Protege tudo exceto assets estáticos, _next e as rotas de API (a API valida sozinha).
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:webp|png|jpg|jpeg|gif|svg|ico)).*)",
+  ],
 };
