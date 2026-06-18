@@ -396,7 +396,12 @@ export default function RoomGrid() {
       <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col p-4 sm:p-6">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-navy">Academia TIS</h1>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Logo.png"
+              alt="Academia TIS"
+              className="h-12 object-contain object-left"
+            />
             <p className="text-lg text-slate-500 capitalize">{periodLabel}</p>
           </div>
           <div className="flex items-center gap-5">
