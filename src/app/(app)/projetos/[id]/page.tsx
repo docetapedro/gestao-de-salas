@@ -157,7 +157,7 @@ export default function RelatorioPage({
           />
           <Kpi label="Receita Gerada" value={formatAOA(fin.receita.realizado)} />
           <Kpi
-            label="ROI"
+            label="ROI Previsto"
             value={fin.roiPct === null ? "—" : formatPct(fin.roiPct, 0)}
             ok={fin.roiPct === null ? null : fin.roiPct >= 0}
           />
