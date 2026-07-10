@@ -24,7 +24,8 @@ export function projectScalars(body: any): Prisma.ProjectUncheckedCreateInput {
   return {
     nome: String(body.nome || "").trim(),
     descricao: str(body.descricao),
-    areaTematica: str(body.areaTematica),
+    segmentoMercado: str(body.segmentoMercado),
+    codigoTurma: str(body.codigoTurma),
     clienteId: str(body.clienteId),
     pilarId: str(body.pilarId),
     localId: str(body.localId),

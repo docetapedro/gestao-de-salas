@@ -105,7 +105,9 @@ model Project {
   id           String    @id @default(cuid())
   nome         String
   descricao    String?
-  areaTematica String?
+  // Segmento de mercado (B2C, B2B, B2G). Coluna mantém o nome antigo para evitar migração destrutiva.
+  segmentoMercado String? @map("areaTematica")
+  codigoTurma     String?
 
   pilarId String?
   pilar   Pilar?  @relation(fields: [pilarId], references: [id], onDelete: SetNull)

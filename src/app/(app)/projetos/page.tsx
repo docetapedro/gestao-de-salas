@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 type Projeto = {
   id: string;
   nome: string;
-  areaTematica: string | null;
+  segmentoMercado: string | null;
   cliente: { nome: string } | null;
   modalidade: string | null;
   dataInicio: string | null;
@@ -84,7 +84,7 @@ export default function ProjetosPage() {
                       {p.nome}
                     </Link>
                     <div className="text-xs text-slate-400">
-                      {p.areaTematica || p.pilar?.nome || "—"}
+                      {p.segmentoMercado || p.pilar?.nome || "—"}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{p.cliente?.nome || "—"}</td>

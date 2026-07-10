@@ -33,7 +33,8 @@ type Indicadores = {
 type Projeto = {
   id: string;
   nome: string;
-  areaTematica: string | null;
+  segmentoMercado: string | null;
+  codigoTurma: string | null;
   cliente: { nome: string } | null;
   dataInicio: string | null;
   dataFim: string | null;
@@ -168,7 +169,9 @@ export default function RelatorioPage({
           <Bloco titulo="Identificação & Público">
             <Sub>Dados da Formação</Sub>
             <Linha k="Nome da Formação" v={projeto.nome} />
-            <Linha k="Área Temática" v={projeto.areaTematica || projeto.pilar?.nome || "—"} />
+            <Linha k="Código da Turma" v={projeto.codigoTurma || "—"} />
+            <Linha k="Segmento de Mercado" v={projeto.segmentoMercado || "—"} />
+            <Linha k="Pilar" v={projeto.pilar?.nome || "—"} />
             <Linha k="Data de Início" v={fDate(projeto.dataInicio)} />
             <Linha k="Data de Fim" v={fDate(projeto.dataFim)} />
             <Linha
@@ -231,7 +234,11 @@ export default function RelatorioPage({
                   <td className="py-1">Custo Total</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.realizado)}</td>
-                  <td className="py-1 text-right">
+                  <td
+                    className={`py-1 text-right ${desvioClass(
+                      desvioPct(fin.custo.previsto, fin.custo.realizado)
+                    )}`}
+                  >
                     {formatPct(desvioPct(fin.custo.previsto, fin.custo.realizado), 1)}
                   </td>
                 </tr>
@@ -239,7 +246,11 @@ export default function RelatorioPage({
                   <td className="py-1">Margem Bruta</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.realizado)}</td>
-                  <td className="py-1 text-right">
+                  <td
+                    className={`py-1 text-right ${desvioClass(
+                      desvioPct(fin.margem.previsto, fin.margem.realizado)
+                    )}`}
+                  >
                     {formatPct(desvioPct(fin.margem.previsto, fin.margem.realizado), 1)}
                   </td>
                 </tr>
@@ -385,18 +396,25 @@ function Linha({ k, v }: { k: string; v: string }) {
   );
 }
 
+// Classe de cor do desvio: verde se positivo, vermelho se negativo.
+function desvioClass(v: number | null): string {
+  if (v === null || v === 0) return "text-slate-600";
+  return v > 0 ? "text-emerald-600" : "text-red-600";
+}
+
 function FinLinha({
   f,
 }: {
   f: { previsto: number; realizado: number; rubrica: { nome: string } };
 }) {
+  const desvio = desvioPct(f.previsto, f.realizado);
   return (
     <tr className="border-t border-slate-100">
       <td className="py-1 text-slate-600">{f.rubrica.nome}</td>
       <td className="py-1 text-right text-slate-600">{formatNum(f.previsto)}</td>
       <td className="py-1 text-right text-slate-600">{formatNum(f.realizado)}</td>
-      <td className="py-1 text-right text-slate-600">
-        {formatPct(desvioPct(f.previsto, f.realizado), 1)}
+      <td className={`py-1 text-right ${desvioClass(desvio)}`}>
+        {formatPct(desvio, 1)}
       </td>
     </tr>
   );

@@ -22,7 +22,8 @@ export type ProjectInitial = {
   id: string;
   nome: string;
   descricao: string | null;
-  areaTematica: string | null;
+  segmentoMercado: string | null;
+  codigoTurma: string | null;
   clienteId: string | null;
   pilarId: string | null;
   localId: string | null;
@@ -66,7 +67,8 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
   const [form, setForm] = useState({
     nome: s(initial?.nome),
     descricao: s(initial?.descricao),
-    areaTematica: s(initial?.areaTematica),
+    segmentoMercado: s(initial?.segmentoMercado),
+    codigoTurma: s(initial?.codigoTurma),
     clienteId: s(initial?.clienteId),
     pilarId: s(initial?.pilarId),
     localId: s(initial?.localId),
@@ -244,12 +246,24 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
               onChange={(e) => set("descricao", e.target.value)}
             />
           </Field>
-          <Field label="Área Temática">
+          <Field label="Código da Turma">
             <input
               className="input"
-              value={form.areaTematica}
-              onChange={(e) => set("areaTematica", e.target.value)}
+              value={form.codigoTurma}
+              onChange={(e) => set("codigoTurma", e.target.value)}
             />
+          </Field>
+          <Field label="Segmento de Mercado">
+            <select
+              className="input"
+              value={form.segmentoMercado}
+              onChange={(e) => set("segmentoMercado", e.target.value)}
+            >
+              <option value="">—</option>
+              <option value="B2C">B2C</option>
+              <option value="B2B">B2B</option>
+              <option value="B2G">B2G</option>
+            </select>
           </Field>
           <Field label="Pilar">
             <select
