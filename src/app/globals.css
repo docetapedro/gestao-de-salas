@@ -42,3 +42,25 @@ body {
 .grid-scroll::-webkit-scrollbar-track {
   @apply bg-slate-200;
 }
+
+/* Impressão do Relatório One-Page: esconde navegação e usa a folha inteira. */
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+  }
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+}

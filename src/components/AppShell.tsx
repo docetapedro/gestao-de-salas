@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
 import {
+  BriefcaseIcon,
   CalendarIcon,
   DoorIcon,
   GridIcon,
@@ -13,6 +14,7 @@ import {
   LogoutIcon,
   MenuIcon,
   PanelLeftIcon,
+  SlidersIcon,
   UsersIcon,
 } from "@/components/icons";
 
@@ -27,6 +29,8 @@ const NAV = [
   { href: "/dashboard", label: "Agenda", Icon: GridIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
   { href: "/eventos", label: "Eventos", Icon: CalendarIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
   { href: "/salas", label: "Salas", Icon: DoorIcon, roles: ["ADMIN", "MANAGER"] },
+  { href: "/projetos", label: "Projectos", Icon: BriefcaseIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
+  { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, roles: ["ADMIN", "MANAGER"] },
   { href: "/usuarios", label: "Usuários", Icon: UsersIcon, roles: ["ADMIN"] },
 ] as const;
 

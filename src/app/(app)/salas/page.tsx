@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { ConfirmDialog } from "@/components/Modal";
 
 type Room = {
   id: string;
@@ -28,6 +29,8 @@ export default function SalasPage() {
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toDelete, setToDelete] = useState<Room | null>(null);
+  const [busyDel, setBusyDel] = useState(false);
 
   async function load() {
     try {
@@ -95,14 +98,18 @@ export default function SalasPage() {
     }
   }
 
-  async function remove(r: Room) {
-    if (!confirm(`Excluir a sala "${r.name}"? Os eventos dela também serão removidos.`))
-      return;
+  async function confirmDelete() {
+    if (!toDelete) return;
+    setBusyDel(true);
+    setError(null);
     try {
-      await api(`/api/rooms/${r.id}`, { method: "DELETE" });
+      await api(`/api/rooms/${toDelete.id}`, { method: "DELETE" });
+      setToDelete(null);
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      setError((err as Error).message);
+    } finally {
+      setBusyDel(false);
     }
   }
 
@@ -177,7 +184,7 @@ export default function SalasPage() {
                       Editar
                     </button>
                     <button
-                      onClick={() => remove(r)}
+                      onClick={() => setToDelete(r)}
                       className="text-red-600 hover:underline"
                     >
                       Excluir
@@ -276,6 +283,23 @@ export default function SalasPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Excluir sala"
+          danger
+          busy={busyDel}
+          confirmLabel="Excluir"
+          message={
+            <>
+              Excluir a sala <b>{toDelete.name}</b>? Os eventos dela também serão
+              removidos.
+            </>
+          }
+          onConfirm={confirmDelete}
+          onCancel={() => setToDelete(null)}
+        />
       )}
 
       <style jsx global>{`

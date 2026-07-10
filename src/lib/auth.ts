@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import {
@@ -32,9 +32,14 @@ export async function getSession(): Promise<SessionPayload | null> {
 export async function createSession(payload: SessionPayload): Promise<void> {
   const token = await signSession(payload);
   const store = await cookies();
+  // Só marca o cookie como "secure" quando a ligação é realmente HTTPS.
+  // Assim funciona em produção na Vercel (HTTPS) e também em testes na rede
+  // local por HTTP (onde o browser recusaria um cookie secure).
+  const proto = (await headers()).get("x-forwarded-proto");
+  const secure = proto === "https";
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure,
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE,

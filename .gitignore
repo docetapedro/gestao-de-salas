@@ -38,3 +38,7 @@ next-env.d.ts
 
 # ferramentas locais
 /.qodo
+
+# ficheiros de referência locais
+/Controlo.xlsx
+/Necessidades.md

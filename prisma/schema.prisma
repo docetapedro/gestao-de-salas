@@ -36,7 +36,8 @@ model Room {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  events Event[]
+  events   Event[]
+  projects Project[]
 }
 
 model Event {
@@ -59,4 +60,153 @@ model Event {
   @@index([roomId, startAt])
   @@index([startAt])
   @@index([seriesId])
+}
+
+// ===========================================================================
+// Módulo: Gestão de Projectos (Formações)
+// Objectivo final: produzir o "Relatório de Formação — One Page Report",
+// com indicadores de público, financeiro/ROI e qualidade por projecto.
+// ===========================================================================
+
+// Pilar estratégico / área a que o projecto pertence.
+model Pilar {
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+// Formador / corpo técnico. Pode ser interno ou externo.
+model Formador {
+  id        String            @id @default(cuid())
+  nome      String
+  tipo      String            @default("INTERNO") // INTERNO | EXTERNO
+  telefone  String?
+  email     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  projetos  ProjectFormador[]
+}
+
+// Tipo de rubrica financeira (receita ou custo), ex.: "Valor do IVA 14%".
+model RubricaTipo {
+  id        String           @id @default(cuid())
+  nome      String
+  tipo      String           @default("CUSTO") // RECEITA | CUSTO
+  ordem     Int              @default(0)
+  createdAt DateTime         @default(now())
+  itens     FinanceiroItem[]
+
+  @@unique([nome, tipo])
+}
+
+// Projecto / Formação — entidade central do relatório.
+model Project {
+  id           String  @id @default(cuid())
+  nome         String
+  descricao    String?
+  areaTematica String?
+
+  pilarId String?
+  pilar   Pilar?  @relation(fields: [pilarId], references: [id], onDelete: SetNull)
+  // "Local / Sala" reutiliza a tabela de Salas (Room) já existente.
+  localId String?
+  local   Room?   @relation(fields: [localId], references: [id], onDelete: SetNull)
+  // Cliente da formação (tabela própria).
+  clienteId String?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  dataInicio      DateTime?
+  dataFim         DateTime?
+  duracaoHoras    Float?
+  modalidade      String? // Presencial | Online | Híbrido
+  nivel           String? // BASICO | INTERMEDIO | AVANCADO
+  formadorInterno Boolean @default(true)
+  selecaoFormador String?
+
+  // Indicadores de qualidade (entrada manual) — "Real / Status" no relatório.
+  nps           Float?
+  taxaConclusao Float? // 0-100 (%)
+  taxaPresenca  Float? // 0-100 (%)
+  taxaAprovacao Float? // 0-100 (%)
+  avalFormador  Float? // escala (ex.: 4.3)
+  reclamacoes   Int    @default(0)
+
+  // Avaliação por critério (NPS detalhado) — 0-100 ou escala.
+  avConteudo       Float?
+  avClareza        Float?
+  avMateriais      Float?
+  avOrganizacao    Float?
+  avAplicabilidade Float?
+
+  comentarios           String?
+  responsavelPedagogica String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  formadores    ProjectFormador[]
+  participantes Participante[]
+  financeiro    FinanceiroItem[]
+
+  @@index([pilarId])
+  @@index([localId])
+  @@index([clienteId])
+}
+
+// Cliente / conta a quem a formação é prestada (ex.: "AUREA — B2C Particulares").
+model Cliente {
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  tipo      String    @default("B2C") // B2B | B2C
+  telefone  String?
+  email     String?
+  descricao String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  projects  Project[]
+}
+
+// Ligação N:N entre projecto e formadores (múltiplos formadores por projecto).
+model ProjectFormador {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  formadorId String
+  formador   Formador @relation(fields: [formadorId], references: [id], onDelete: Cascade)
+  papel      String?
+
+  @@unique([projectId, formadorId])
+  @@index([projectId])
+}
+
+// Participante / formando inscrito num projecto.
+model Participante {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tipo      String   @default("B2C") // B2B | B2C
+  nome      String
+  origem    String? // Empresa / Departamento (agrupador de "Participantes por Origem")
+  descricao String?
+  telefone  String?
+  email     String?
+  concluido Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+// Lançamento financeiro por rubrica: previsto vs realizado.
+model FinanceiroItem {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rubricaId String
+  rubrica   RubricaTipo @relation(fields: [rubricaId], references: [id], onDelete: Cascade)
+  previsto  Float       @default(0)
+  realizado Float       @default(0)
+
+  @@index([projectId])
 }
