@@ -216,6 +216,7 @@ export default function RelatorioPage({
                   <th className="font-medium pb-1">Rubrica</th>
                   <th className="font-medium pb-1 text-right">Previsto (AOA)</th>
                   <th className="font-medium pb-1 text-right">Realizado (AOA)</th>
+                  <th className="font-medium pb-1 text-right">Desvio (AOA)</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,11 +230,17 @@ export default function RelatorioPage({
                   <td className="py-1">Custo Total</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.realizado)}</td>
+                  <td className="py-1 text-right">
+                    {formatNum(fin.custo.realizado - fin.custo.previsto)}
+                  </td>
                 </tr>
                 <tr className="font-semibold text-slate-800">
                   <td className="py-1">Margem Bruta</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.realizado)}</td>
+                  <td className="py-1 text-right">
+                    {formatNum(fin.margem.realizado - fin.margem.previsto)}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -242,8 +249,8 @@ export default function RelatorioPage({
             <Linha k="Investimento Total (custo)" v={formatAOA(fin.custo.realizado)} />
             <Linha k="Retorno Mensurável (receita)" v={formatAOA(fin.receita.realizado)} />
             <Linha
-              k="ROI (Receita / Custo)"
-              v={fin.roiPct === null ? "—" : formatPct(fin.roiPct, 1)}
+              k="Margem em Valor (AOA)"
+              v={formatAOA(fin.margem.realizado)}
             />
             <Linha k="Custo por Formando" v={formatAOA(fin.custoPorFormando)} />
             <Linha
@@ -387,6 +394,9 @@ function FinLinha({
       <td className="py-1 text-slate-600">{f.rubrica.nome}</td>
       <td className="py-1 text-right text-slate-600">{formatNum(f.previsto)}</td>
       <td className="py-1 text-right text-slate-600">{formatNum(f.realizado)}</td>
+      <td className="py-1 text-right text-slate-600">
+        {formatNum(f.realizado - f.previsto)}
+      </td>
     </tr>
   );
 }
