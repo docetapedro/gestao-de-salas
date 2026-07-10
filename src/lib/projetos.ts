@@ -64,7 +64,7 @@ export type Financeiro = {
   receita: { previsto: number; realizado: number };
   custo: { previsto: number; realizado: number };
   margem: { previsto: number; realizado: number };
-  roiPct: number | null; // (margem realizada / custo previsto) * 100
+  roiPct: number | null; // ((receita realizada − custo previsto) / custo previsto) * 100
   custoPorFormando: number | null;
   breakEvenFormandos: number | null;
   custoRealizadoPct: number | null; // realizado / previsto do custo
@@ -81,10 +81,10 @@ export function calcularIndicadores(p: ProjectForIndicators) {
     realizado: receita.realizado - custo.realizado,
   };
 
-  // ROI = Margem em valor (receita − custo realizados) / Investimento previsto × 100.
+  // ROI = Margem em valor (receita realizada − custo previsto) / Investimento previsto × 100.
   const roiPct =
     custo.previsto > 0
-      ? ((receita.realizado - custo.realizado) / custo.previsto) * 100
+      ? ((receita.realizado - custo.previsto) / custo.previsto) * 100
       : null;
 
   const custoPorFormando = inscritos > 0 ? custo.realizado / inscritos : null;
