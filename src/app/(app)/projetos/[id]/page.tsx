@@ -225,7 +225,7 @@ export default function RelatorioPage({
               </thead>
               <tbody>
                 {receitasFin.map((f, i) => (
-                  <FinLinha key={`r${i}`} f={f} green />
+                  <FinLinha key={`r${i}`} f={f} green={/inscri/i.test(f.rubrica.nome)} />
                 ))}
                 {custosFin.map((f, i) => (
                   <FinLinha key={`c${i}`} f={f} />
@@ -352,9 +352,9 @@ function Kpi({
 }) {
   if (green) {
     return (
-      <div className="rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-center">
-        <div className="text-lg font-bold text-green-700 leading-tight">{value}</div>
-        <div className="text-[11px] text-green-700/80 leading-tight mt-0.5">{label}</div>
+      <div className="rounded-xl border border-green-700 bg-green-600 px-3 py-2 text-center print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
+        <div className="text-lg font-bold text-white leading-tight">{value}</div>
+        <div className="text-[11px] text-green-50 leading-tight mt-0.5">{label}</div>
       </div>
     );
   }
