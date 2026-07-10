@@ -87,7 +87,8 @@ export function calcularIndicadores(p: ProjectForIndicators) {
       ? ((receita.realizado - custo.previsto) / custo.previsto) * 100
       : null;
 
-  const custoPorFormando = inscritos > 0 ? custo.realizado / inscritos : null;
+  // Custo por formando = Investimento Total (custo previsto) / nº de inscritos.
+  const custoPorFormando = inscritos > 0 ? custo.previsto / inscritos : null;
 
   // Break-even: nº de formandos para cobrir o custo, à receita média por formando.
   const receitaPorFormando = inscritos > 0 ? receita.realizado / inscritos : 0;
