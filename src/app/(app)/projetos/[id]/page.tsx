@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import {
   METAS,
   NIVEL_LABEL,
+  desvioPct,
   formatAOA,
   formatNum,
   formatPct,
@@ -216,7 +217,7 @@ export default function RelatorioPage({
                   <th className="font-medium pb-1">Rubrica</th>
                   <th className="font-medium pb-1 text-right">Previsto (AOA)</th>
                   <th className="font-medium pb-1 text-right">Realizado (AOA)</th>
-                  <th className="font-medium pb-1 text-right">Desvio (AOA)</th>
+                  <th className="font-medium pb-1 text-right">Desvio (%)</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,7 +232,7 @@ export default function RelatorioPage({
                   <td className="py-1 text-right">{formatNum(fin.custo.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.realizado)}</td>
                   <td className="py-1 text-right">
-                    {formatNum(fin.custo.realizado - fin.custo.previsto)}
+                    {formatPct(desvioPct(fin.custo.previsto, fin.custo.realizado), 1)}
                   </td>
                 </tr>
                 <tr className="font-semibold text-slate-800">
@@ -239,14 +240,14 @@ export default function RelatorioPage({
                   <td className="py-1 text-right">{formatNum(fin.margem.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.realizado)}</td>
                   <td className="py-1 text-right">
-                    {formatNum(fin.margem.realizado - fin.margem.previsto)}
+                    {formatPct(desvioPct(fin.margem.previsto, fin.margem.realizado), 1)}
                   </td>
                 </tr>
               </tbody>
             </table>
 
             <Sub>Análise de ROI</Sub>
-            <Linha k="Investimento Total (custo)" v={formatAOA(fin.custo.realizado)} />
+            <Linha k="Investimento Total (custo)" v={formatAOA(fin.custo.previsto)} />
             <Linha k="Retorno Mensurável (receita)" v={formatAOA(fin.receita.realizado)} />
             <Linha
               k="Margem em Valor (AOA)"
@@ -395,7 +396,7 @@ function FinLinha({
       <td className="py-1 text-right text-slate-600">{formatNum(f.previsto)}</td>
       <td className="py-1 text-right text-slate-600">{formatNum(f.realizado)}</td>
       <td className="py-1 text-right text-slate-600">
-        {formatNum(f.realizado - f.previsto)}
+        {formatPct(desvioPct(f.previsto, f.realizado), 1)}
       </td>
     </tr>
   );

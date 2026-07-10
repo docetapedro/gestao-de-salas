@@ -64,7 +64,7 @@ export type Financeiro = {
   receita: { previsto: number; realizado: number };
   custo: { previsto: number; realizado: number };
   margem: { previsto: number; realizado: number };
-  roiPct: number | null; // ((receita - custo) / custo) * 100 (realizado)
+  roiPct: number | null; // (margem realizada / custo previsto) * 100
   custoPorFormando: number | null;
   breakEvenFormandos: number | null;
   custoRealizadoPct: number | null; // realizado / previsto do custo
@@ -81,9 +81,10 @@ export function calcularIndicadores(p: ProjectForIndicators) {
     realizado: receita.realizado - custo.realizado,
   };
 
+  // ROI = Margem em valor (receita − custo realizados) / Investimento previsto × 100.
   const roiPct =
-    custo.realizado > 0
-      ? ((receita.realizado - custo.realizado) / custo.realizado) * 100
+    custo.previsto > 0
+      ? ((receita.realizado - custo.realizado) / custo.previsto) * 100
       : null;
 
   const custoPorFormando = inscritos > 0 ? custo.realizado / inscritos : null;
@@ -147,6 +148,12 @@ export function formatNum(v: number | null | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/** Desvio percentual do realizado face ao previsto: (realizado − previsto) / previsto × 100. */
+export function desvioPct(previsto: number, realizado: number): number | null {
+  if (!previsto) return null;
+  return ((realizado - previsto) / previsto) * 100;
 }
 
 export function formatPct(v: number | null | undefined, casas = 0): string {
