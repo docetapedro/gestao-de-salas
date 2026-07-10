@@ -234,25 +234,13 @@ export default function RelatorioPage({
                   <td className="py-1">Custo Total</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.custo.realizado)}</td>
-                  <td
-                    className={`py-1 text-right ${desvioClass(
-                      desvioPct(fin.custo.previsto, fin.custo.realizado)
-                    )}`}
-                  >
-                    {formatPct(desvioPct(fin.custo.previsto, fin.custo.realizado), 1)}
-                  </td>
+                  <td className="py-1 text-right"></td>
                 </tr>
                 <tr className="font-semibold text-slate-800">
                   <td className="py-1">Margem Bruta</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.previsto)}</td>
                   <td className="py-1 text-right">{formatNum(fin.margem.realizado)}</td>
-                  <td
-                    className={`py-1 text-right ${desvioClass(
-                      desvioPct(fin.margem.previsto, fin.margem.realizado)
-                    )}`}
-                  >
-                    {formatPct(desvioPct(fin.margem.previsto, fin.margem.realizado), 1)}
-                  </td>
+                  <td className="py-1 text-right"></td>
                 </tr>
               </tbody>
             </table>
