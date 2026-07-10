@@ -140,6 +140,15 @@ export function formatAOA(v: number | null | undefined): string {
   );
 }
 
+/** Formata um valor numérico sem o prefixo "AOA" (usar quando a moeda já está no cabeçalho). */
+export function formatNum(v: number | null | undefined): string {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return v.toLocaleString("pt-AO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function formatPct(v: number | null | undefined, casas = 0): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   return `${v.toLocaleString("pt-PT", {

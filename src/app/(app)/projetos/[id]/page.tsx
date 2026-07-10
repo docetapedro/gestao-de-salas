@@ -7,6 +7,7 @@ import {
   METAS,
   NIVEL_LABEL,
   formatAOA,
+  formatNum,
   formatPct,
   type Nivel,
 } from "@/lib/projetos";
@@ -213,8 +214,8 @@ export default function RelatorioPage({
               <thead>
                 <tr className="text-slate-400 text-left">
                   <th className="font-medium pb-1">Rubrica</th>
-                  <th className="font-medium pb-1 text-right">Previsto</th>
-                  <th className="font-medium pb-1 text-right">Realizado</th>
+                  <th className="font-medium pb-1 text-right">Previsto (AOA)</th>
+                  <th className="font-medium pb-1 text-right">Realizado (AOA)</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,13 +227,13 @@ export default function RelatorioPage({
                 ))}
                 <tr className="border-t border-slate-200 font-semibold text-slate-800">
                   <td className="py-1">Custo Total</td>
-                  <td className="py-1 text-right">{formatAOA(fin.custo.previsto)}</td>
-                  <td className="py-1 text-right">{formatAOA(fin.custo.realizado)}</td>
+                  <td className="py-1 text-right">{formatNum(fin.custo.previsto)}</td>
+                  <td className="py-1 text-right">{formatNum(fin.custo.realizado)}</td>
                 </tr>
                 <tr className="font-semibold text-slate-800">
                   <td className="py-1">Margem Bruta</td>
-                  <td className="py-1 text-right">{formatAOA(fin.margem.previsto)}</td>
-                  <td className="py-1 text-right">{formatAOA(fin.margem.realizado)}</td>
+                  <td className="py-1 text-right">{formatNum(fin.margem.previsto)}</td>
+                  <td className="py-1 text-right">{formatNum(fin.margem.realizado)}</td>
                 </tr>
               </tbody>
             </table>
@@ -384,8 +385,8 @@ function FinLinha({
   return (
     <tr className="border-t border-slate-100">
       <td className="py-1 text-slate-600">{f.rubrica.nome}</td>
-      <td className="py-1 text-right text-slate-600">{formatAOA(f.previsto)}</td>
-      <td className="py-1 text-right text-slate-600">{formatAOA(f.realizado)}</td>
+      <td className="py-1 text-right text-slate-600">{formatNum(f.previsto)}</td>
+      <td className="py-1 text-right text-slate-600">{formatNum(f.realizado)}</td>
     </tr>
   );
 }
