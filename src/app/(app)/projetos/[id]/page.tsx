@@ -155,7 +155,7 @@ export default function RelatorioPage({
             value={ind.qualidade.nps.valor?.toString() ?? "—"}
             ok={ind.qualidade.nps.atingiu}
           />
-          <Kpi label="Receita Gerada" value={formatAOA(fin.receita.realizado)} />
+          <Kpi label="Receita Gerada" value={formatAOA(fin.receita.realizado)} green />
           <Kpi
             label="ROI Previsto"
             value={fin.roiPct === null ? "—" : formatPct(fin.roiPct, 0)}
@@ -225,7 +225,7 @@ export default function RelatorioPage({
               </thead>
               <tbody>
                 {receitasFin.map((f, i) => (
-                  <FinLinha key={`r${i}`} f={f} />
+                  <FinLinha key={`r${i}`} f={f} green />
                 ))}
                 {custosFin.map((f, i) => (
                   <FinLinha key={`c${i}`} f={f} />
@@ -343,11 +343,21 @@ function Kpi({
   label,
   value,
   ok,
+  green,
 }: {
   label: string;
   value: string;
   ok?: boolean | null;
+  green?: boolean;
 }) {
+  if (green) {
+    return (
+      <div className="rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-center">
+        <div className="text-lg font-bold text-green-700 leading-tight">{value}</div>
+        <div className="text-[11px] text-green-700/80 leading-tight mt-0.5">{label}</div>
+      </div>
+    );
+  }
   const ring =
     ok === true ? "border-green-300" : ok === false ? "border-red-300" : "border-slate-200";
   return (
@@ -392,15 +402,21 @@ function desvioClass(v: number | null): string {
 
 function FinLinha({
   f,
+  green,
 }: {
   f: { previsto: number; realizado: number; rubrica: { nome: string } };
+  green?: boolean;
 }) {
   const desvio = desvioPct(f.previsto, f.realizado);
   return (
     <tr className="border-t border-slate-100">
       <td className="py-1 text-slate-600">{f.rubrica.nome}</td>
       <td className="py-1 text-right text-slate-600">{formatNum(f.previsto)}</td>
-      <td className="py-1 text-right text-slate-600">{formatNum(f.realizado)}</td>
+      <td
+        className={`py-1 text-right ${green ? "text-green-700 font-medium" : "text-slate-600"}`}
+      >
+        {formatNum(f.realizado)}
+      </td>
       <td className={`py-1 text-right ${desvioClass(desvio)}`}>
         {formatPct(desvio, 1)}
       </td>
