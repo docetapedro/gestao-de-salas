@@ -250,7 +250,7 @@ export default function RelatorioPage({
             <Linha k="Retorno Mensurável (receita)" v={formatAOA(fin.receita.realizado)} />
             <Linha
               k="Margem em Valor (AOA)"
-              v={formatAOA(fin.receita.realizado - fin.custo.previsto)}
+              v={formatAOA(fin.receita.realizado - fin.custo.realizado)}
             />
             <Linha k="Custo por Formando" v={formatAOA(fin.custoPorFormando)} />
             <Linha
