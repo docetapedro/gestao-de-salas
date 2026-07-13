@@ -246,7 +246,7 @@ export default function RelatorioPage({
             </table>
 
             <Sub>Análise de ROI</Sub>
-            <Linha k="Investimento Total (custo)" v={formatAOA(fin.custo.previsto)} />
+            <Linha k="Investimento Total (custo)" v={formatAOA(fin.custo.realizado)} />
             <Linha k="Retorno Mensurável (receita)" v={formatAOA(fin.receita.realizado)} />
             <Linha
               k="Margem em Valor (AOA)"
