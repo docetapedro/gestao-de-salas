@@ -228,7 +228,7 @@ export default function RelatorioPage({
                   <FinLinha key={`r${i}`} f={f} green={/inscri/i.test(f.rubrica.nome)} />
                 ))}
                 {custosFin.map((f, i) => (
-                  <FinLinha key={`c${i}`} f={f} />
+                  <FinLinha key={`c${i}`} f={f} custo />
                 ))}
                 <tr className="border-t border-slate-200 font-semibold text-slate-800">
                   <td className="py-1">Custo Total</td>
@@ -394,18 +394,22 @@ function Linha({ k, v }: { k: string; v: string }) {
   );
 }
 
-// Classe de cor do desvio: verde se positivo, vermelho se negativo.
-function desvioClass(v: number | null): string {
+// Classe de cor do desvio. Nas receitas, positivo (realizado > previsto) é bom;
+// nos custos é o contrário: gastar acima do previsto é mau.
+function desvioClass(v: number | null, custo = false): string {
   if (v === null || v === 0) return "text-slate-600";
-  return v > 0 ? "text-emerald-600" : "text-red-600";
+  const bom = custo ? v < 0 : v > 0;
+  return bom ? "text-emerald-600" : "text-red-600";
 }
 
 function FinLinha({
   f,
   green,
+  custo,
 }: {
   f: { previsto: number; realizado: number; rubrica: { nome: string } };
   green?: boolean;
+  custo?: boolean;
 }) {
   const desvio = desvioPct(f.previsto, f.realizado);
   return (
@@ -417,7 +421,7 @@ function FinLinha({
       >
         {formatNum(f.realizado)}
       </td>
-      <td className={`py-1 text-right ${desvioClass(desvio)}`}>
+      <td className={`py-1 text-right ${desvioClass(desvio, custo)}`}>
         {formatPct(desvio, 1)}
       </td>
     </tr>
