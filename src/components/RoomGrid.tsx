@@ -398,7 +398,7 @@ export default function RoomGrid() {
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/Logo.png"
+              src="/Logo1.png"
               alt="Academia TIS"
               className="h-12 object-contain object-left"
             />
