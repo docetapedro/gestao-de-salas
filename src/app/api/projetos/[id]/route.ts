@@ -8,7 +8,6 @@ import {
   projectScalars,
   formadoresCreate,
   participantesCreate,
-  financeiroCreate,
   projectInclude,
 } from "../_shared";
 
@@ -38,18 +37,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const scalars = projectScalars(body);
     if (!scalars.nome) return json({ error: "Nome do projecto é obrigatório" }, 400);
 
-    // Substitui as colecções-filho por completo (abordagem simples e previsível).
+    // Substitui formadores e participantes por completo. O financeiro e as
+    // turmas NÃO são tocados aqui — passam a ser geridos por turma no detalhe.
     const projeto = await prisma.$transaction(async (tx) => {
       await tx.projectFormador.deleteMany({ where: { projectId: id } });
       await tx.participante.deleteMany({ where: { projectId: id } });
-      await tx.financeiroItem.deleteMany({ where: { projectId: id } });
       return tx.project.update({
         where: { id },
         data: {
           ...scalars,
           formadores: { create: formadoresCreate(body) },
           participantes: { create: participantesCreate(body) },
-          financeiro: { create: financeiroCreate(body) },
         },
       });
     });

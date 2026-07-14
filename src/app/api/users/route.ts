@@ -15,6 +15,7 @@ export async function GET() {
         id: true,
         name: true,
         email: true,
+        username: true,
         role: true,
         notify: true,
         active: true,
@@ -34,6 +35,9 @@ export async function POST(req: NextRequest) {
 
     const name = String(body.name || "").trim();
     const email = String(body.email || "").toLowerCase().trim();
+    const username = body.username
+      ? String(body.username).toLowerCase().trim()
+      : null;
     const password = String(body.password || "");
     const role = ROLES.includes(body.role) ? body.role : "VIEWER";
 
@@ -45,10 +49,19 @@ export async function POST(req: NextRequest) {
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) return json({ error: "Já existe um usuário com este email" }, 409);
 
+    if (username) {
+      const uExists = await prisma.user.findFirst({
+        where: { OR: [{ username }, { email: username }] },
+      });
+      if (uExists)
+        return json({ error: "Nome de utilizador já está em uso" }, 409);
+    }
+
     const user = await prisma.user.create({
       data: {
         name,
         email,
+        username,
         password: await hashPassword(password),
         role,
         notify: body.notify === undefined ? true : Boolean(body.notify),
@@ -58,6 +71,7 @@ export async function POST(req: NextRequest) {
         id: true,
         name: true,
         email: true,
+        username: true,
         role: true,
         notify: true,
         active: true,

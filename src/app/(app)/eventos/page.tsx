@@ -4,7 +4,32 @@ import { useCallback, useEffect, useState } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { ptBR } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
+import { ChevronLeft, ChevronRight, Pencil, Plus, Repeat, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Modal, ConfirmDialog } from "@/components/Modal";
 
 registerLocale("pt-BR", ptBR);
 
@@ -41,6 +66,10 @@ type EventItem = {
 
 const PAGE_SIZE = 10;
 
+// Classe para os campos DatePicker (mantém aparência de Input do shadcn).
+const dpInput =
+  "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
+
 const emptyForm = () => {
   const now = new Date();
   now.setMinutes(0, 0, 0);
@@ -59,13 +88,16 @@ const emptyForm = () => {
   };
 };
 
-function statusOf(ev: EventItem) {
+function statusOf(ev: EventItem): {
+  label: string;
+  variant: "secondary" | "destructive" | "success";
+} {
   const n = Date.now();
   const s = new Date(ev.startAt).getTime();
   const e = new Date(ev.endAt).getTime();
-  if (e < n) return { label: "Encerrado", cls: "bg-slate-100 text-slate-500" };
-  if (s <= n) return { label: "Em curso", cls: "bg-red-100 text-red-700" };
-  return { label: "Agendado", cls: "bg-green-100 text-green-700" };
+  if (e < n) return { label: "Encerrado", variant: "secondary" };
+  if (s <= n) return { label: "Em curso", variant: "destructive" };
+  return { label: "Agendado", variant: "success" };
 }
 
 export default function EventosPage() {
@@ -86,6 +118,12 @@ export default function EventosPage() {
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Confirmações de exclusão
+  const [confirmDelete, setConfirmDelete] = useState<EventItem | null>(null);
+  const [confirmDeleteSeries, setConfirmDeleteSeries] =
+    useState<EventItem | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   // Carrega salas + permissão uma vez.
   useEffect(() => {
@@ -136,11 +174,6 @@ export default function EventosPage() {
     load();
   }, [load]);
 
-  // Ao mudar um filtro, volta para a página 1.
-  function changeFilter(setter: (v: string) => void, value: string) {
-    setter(value);
-    setPage(1);
-  }
   function clearFilters() {
     setFRoom("");
     setFFrom(null);
@@ -218,7 +251,7 @@ export default function EventosPage() {
         setShowForm(false);
         await load();
         if (form.repeat !== "none" && res.created !== undefined) {
-          alert(
+          toast.success(
             `Série criada: ${res.created} evento(s).` +
               (res.skipped ? ` ${res.skipped} ignorado(s) por conflito.` : "")
           );
@@ -232,31 +265,32 @@ export default function EventosPage() {
   }
 
   async function remove(ev: EventItem) {
-    if (!confirm(`Excluir o evento "${ev.title}"?`)) return;
+    setRemoving(true);
     try {
       await api(`/api/events/${ev.id}`, { method: "DELETE" });
+      setConfirmDelete(null);
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
+    } finally {
+      setRemoving(false);
     }
   }
 
   async function removeSeries(ev: EventItem) {
-    if (
-      !confirm(
-        `Excluir TODA a série de "${ev.title}"? Todas as ocorrências (passadas e futuras) serão removidas.`
-      )
-    )
-      return;
+    setRemoving(true);
     try {
       const r = await api<{ deleted: number }>(
         `/api/events/${ev.id}?series=1`,
         { method: "DELETE" }
       );
+      setConfirmDeleteSeries(null);
       await load();
-      alert(`Série removida: ${r.deleted} ocorrência(s).`);
+      toast.success(`Série removida: ${r.deleted} ocorrência(s).`);
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -275,39 +309,43 @@ export default function EventosPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-navy">Eventos</h1>
         {canManage && (
-          <button
+          <Button
+            variant="navy"
             onClick={openCreate}
             disabled={rooms.length === 0}
-            className="rounded-lg bg-navy text-white px-4 py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-50"
           >
-            + Novo evento
-          </button>
+            <Plus className="h-4 w-4" />
+            Novo evento
+          </Button>
         )}
       </div>
 
       {/* Barra de filtros */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 mb-4 flex flex-wrap items-end gap-3">
+      <Card className="p-3 mb-4 flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Sala
-          </label>
-          <select
-            value={fRoom}
-            onChange={(e) => changeFilter(setFRoom, e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 h-9 text-sm bg-white"
+          <Label className="mb-1 block text-xs text-slate-500">Sala</Label>
+          <Select
+            value={fRoom || "all"}
+            onValueChange={(v) => {
+              setFRoom(v === "all" ? "" : v);
+              setPage(1);
+            }}
           >
-            <option value="">Todas as salas</option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Todas as salas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as salas</SelectItem>
+              {rooms.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            De
-          </label>
+          <Label className="mb-1 block text-xs text-slate-500">De</Label>
           <DatePicker
             selected={fFrom}
             onChange={(d: Date | null) => {
@@ -321,13 +359,11 @@ export default function EventosPage() {
             locale="pt-BR"
             isClearable
             placeholderText="dd/mm/aaaa"
-            className="rounded-lg border border-slate-300 px-3 h-9 text-sm w-36"
+            className={cn(dpInput, "w-36")}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Até
-          </label>
+          <Label className="mb-1 block text-xs text-slate-500">Até</Label>
           <DatePicker
             selected={fTo}
             onChange={(d: Date | null) => {
@@ -342,29 +378,26 @@ export default function EventosPage() {
             locale="pt-BR"
             isClearable
             placeholderText="dd/mm/aaaa"
-            className="rounded-lg border border-slate-300 px-3 h-9 text-sm w-36"
+            className={cn(dpInput, "w-36")}
           />
         </div>
         {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="h-9 px-3 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50"
-          >
+          <Button variant="outline" onClick={clearFilters}>
             Limpar filtros
-          </button>
+          </Button>
         )}
-        <div className="ml-auto text-sm text-slate-500 self-center">
+        <div className="ml-auto self-center text-sm text-slate-500">
           {total} evento{total === 1 ? "" : "s"}
         </div>
-      </div>
+      </Card>
 
       {error && !showForm && (
-        <div className="mb-3 rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <Card className="overflow-hidden p-0">
         {loading ? (
           <div className="p-8 text-center text-slate-400">Carregando…</div>
         ) : events.length === 0 ? (
@@ -372,34 +405,36 @@ export default function EventosPage() {
             Nenhum evento encontrado{hasFilters ? " com esses filtros" : ""}.
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-left">
-              <tr>
-                <th className="px-4 py-3 font-medium">Evento</th>
-                <th className="px-4 py-3 font-medium">Sala</th>
-                <th className="px-4 py-3 font-medium">Início</th>
-                <th className="px-4 py-3 font-medium">Fim</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                {canManage && <th className="px-4 py-3" />}
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Evento</TableHead>
+                <TableHead>Sala</TableHead>
+                <TableHead>Início</TableHead>
+                <TableHead>Fim</TableHead>
+                <TableHead>Status</TableHead>
+                {canManage && <TableHead className="text-right">Ações</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {events.map((ev) => {
                 const st = statusOf(ev);
                 return (
-                  <tr key={ev.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3 font-medium text-slate-800">
+                  <TableRow key={ev.id}>
+                    <TableCell className="font-medium text-slate-800">
                       {ev.title}
                       {ev.seriesId && (
-                        <span
-                          className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-brand-100 text-brand-700 align-middle"
+                        <Badge
+                          variant="secondary"
+                          className="ml-2 gap-1 bg-brand-100 text-brand-700 align-middle"
                           title="Faz parte de uma série recorrente"
                         >
-                          ↻ série
-                        </span>
+                          <Repeat className="h-3 w-3" />
+                          série
+                        </Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       <span className="inline-flex items-center gap-2 text-slate-600">
                         <span
                           className="h-2.5 w-2.5 rounded-full"
@@ -407,265 +442,274 @@ export default function EventosPage() {
                         />
                         {ev.room.name}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{fmt(ev.startAt)}</td>
-                    <td className="px-4 py-3 text-slate-600">{fmt(ev.endAt)}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}
-                      >
-                        {st.label}
-                      </span>
-                    </td>
+                    </TableCell>
+                    <TableCell className="text-slate-600">
+                      {fmt(ev.startAt)}
+                    </TableCell>
+                    <TableCell className="text-slate-600">
+                      {fmt(ev.endAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={st.variant}>{st.label}</Badge>
+                    </TableCell>
                     {canManage && (
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => openEdit(ev)}
-                          className="text-brand-600 hover:underline mr-3"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => remove(ev)}
-                          className="text-red-600 hover:underline"
-                        >
-                          Excluir
-                        </button>
-                        {ev.seriesId && (
-                          <button
-                            onClick={() => removeSeries(ev)}
-                            className="text-red-700 font-medium hover:underline ml-3"
+                      <TableCell className="whitespace-nowrap text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEdit(ev)}
                           >
-                            Excluir série
-                          </button>
-                        )}
-                      </td>
+                            <Pencil className="h-4 w-4" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setConfirmDelete(ev)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Excluir
+                          </Button>
+                          {ev.seriesId && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="font-medium text-red-700 hover:text-red-800"
+                              onClick={() => setConfirmDeleteSeries(ev)}
+                            >
+                              Excluir série
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
 
         {/* Paginação */}
         {total > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm">
+          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
             <span className="text-slate-500">
               Mostrando {fromIdx}–{toIdx} de {total}
             </span>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="h-8 px-3 rounded-lg border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
               >
-                ‹ Anterior
-              </button>
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </Button>
               <span className="text-slate-600">
                 Página {page} de {totalPages}
               </span>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="h-8 px-3 rounded-lg border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
               >
-                Próximo ›
-              </button>
+                Próximo
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Modal de criar/editar */}
       {showForm && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
-          onClick={() => setShowForm(false)}
-        >
-          <form
-            onSubmit={save}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full"
-          >
-            <div className="bg-navy text-white px-5 py-4 font-bold rounded-t-2xl">
-              {form.id ? "Editar evento" : "Novo evento"}
-            </div>
-            <div className="p-5 space-y-3">
-              {error && (
-                <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
-                  {error}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Título *
-                </label>
-                <input
-                  required
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Sala *
-                </label>
-                <select
-                  required
-                  value={form.roomId}
-                  onChange={(e) => setForm({ ...form, roomId: e.target.value })}
-                  className="input"
-                >
-                  <option value="">Selecione…</option>
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Início *
-                  </label>
-                  <DatePicker
-                    selected={form.startAt}
-                    onChange={(d: Date | null) => {
-                      if (!d) return;
-                      // Mantém o fim depois do início (ajusta se necessário).
-                      const end =
-                        form.endAt <= d
-                          ? new Date(d.getTime() + 60 * 60000)
-                          : form.endAt;
-                      setForm({ ...form, startAt: d, endAt: end });
-                    }}
-                    showTimeSelect
-                    timeIntervals={15}
-                    timeCaption="Hora"
-                    minTime={workMin()}
-                    maxTime={workMax()}
-                    dateFormat="dd/MM/yyyy HH:mm"
-                    locale="pt-BR"
-                    className="input"
-                    wrapperClassName="w-full"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Fim *
-                  </label>
-                  <DatePicker
-                    selected={form.endAt}
-                    onChange={(d: Date | null) => d && setForm({ ...form, endAt: d })}
-                    showTimeSelect
-                    timeIntervals={15}
-                    timeCaption="Hora"
-                    minDate={form.startAt}
-                    minTime={workMin()}
-                    maxTime={workMax()}
-                    dateFormat="dd/MM/yyyy HH:mm"
-                    locale="pt-BR"
-                    className="input"
-                    wrapperClassName="w-full"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Descrição
-                </label>
-                <textarea
-                  rows={2}
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  className="input"
-                />
-              </div>
-              {!form.id && (
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Repetir
-                    </label>
-                    <select
-                      value={form.repeat}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          repeat: e.target.value as typeof form.repeat,
-                          repeatUntil:
-                            e.target.value === "none" ? null : form.repeatUntil,
-                        })
-                      }
-                      className="input"
-                    >
-                      <option value="none">Não repete</option>
-                      <option value="daily">Diariamente (seg–sáb)</option>
-                      <option value="weekly">Semanalmente</option>
-                      <option value="monthly">Mensalmente</option>
-                    </select>
-                  </div>
-                  {form.repeat !== "none" && (
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Repetir até *
-                      </label>
-                      <DatePicker
-                        selected={form.repeatUntil}
-                        onChange={(d: Date | null) =>
-                          setForm({ ...form, repeatUntil: d })
-                        }
-                        dateFormat="dd/MM/yyyy"
-                        locale="pt-BR"
-                        minDate={form.startAt}
-                        placeholderText="dd/mm/aaaa"
-                        className="input"
-                        wrapperClassName="w-full"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="px-5 pb-5 flex gap-2">
-              <button
+        <Modal
+          title={form.id ? "Editar evento" : "Novo evento"}
+          onClose={() => setShowForm(false)}
+          footer={
+            <>
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => setShowForm(false)}
-                className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
+                form="evento-form"
+                variant="navy"
                 disabled={saving}
-                className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
               >
                 {saving ? "Salvando…" : "Salvar"}
-              </button>
+              </Button>
+            </>
+          }
+        >
+          <form id="evento-form" onSubmit={save} className="space-y-3">
+            {error && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+            <div>
+              <Label className="mb-1 block">Título *</Label>
+              <Input
+                required
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
             </div>
+            <div>
+              <Label className="mb-1 block">Sala *</Label>
+              <Select
+                value={form.roomId}
+                onValueChange={(v) => setForm({ ...form, roomId: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <Label className="mb-1 block">Início *</Label>
+                <DatePicker
+                  selected={form.startAt}
+                  onChange={(d: Date | null) => {
+                    if (!d) return;
+                    // Mantém o fim depois do início (ajusta se necessário).
+                    const end =
+                      form.endAt <= d
+                        ? new Date(d.getTime() + 60 * 60000)
+                        : form.endAt;
+                    setForm({ ...form, startAt: d, endAt: end });
+                  }}
+                  showTimeSelect
+                  timeIntervals={15}
+                  timeCaption="Hora"
+                  minTime={workMin()}
+                  maxTime={workMax()}
+                  dateFormat="dd/MM/yyyy HH:mm"
+                  locale="pt-BR"
+                  className={dpInput}
+                  wrapperClassName="w-full"
+                />
+              </div>
+              <div className="flex-1">
+                <Label className="mb-1 block">Fim *</Label>
+                <DatePicker
+                  selected={form.endAt}
+                  onChange={(d: Date | null) => d && setForm({ ...form, endAt: d })}
+                  showTimeSelect
+                  timeIntervals={15}
+                  timeCaption="Hora"
+                  minDate={form.startAt}
+                  minTime={workMin()}
+                  maxTime={workMax()}
+                  dateFormat="dd/MM/yyyy HH:mm"
+                  locale="pt-BR"
+                  className={dpInput}
+                  wrapperClassName="w-full"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="mb-1 block">Descrição</Label>
+              <Textarea
+                rows={2}
+                value={form.description}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+              />
+            </div>
+            {!form.id && (
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label className="mb-1 block">Repetir</Label>
+                  <Select
+                    value={form.repeat}
+                    onValueChange={(v) =>
+                      setForm({
+                        ...form,
+                        repeat: v as typeof form.repeat,
+                        repeatUntil: v === "none" ? null : form.repeatUntil,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não repete</SelectItem>
+                      <SelectItem value="daily">
+                        Diariamente (seg–sáb)
+                      </SelectItem>
+                      <SelectItem value="weekly">Semanalmente</SelectItem>
+                      <SelectItem value="monthly">Mensalmente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.repeat !== "none" && (
+                  <div className="flex-1">
+                    <Label className="mb-1 block">Repetir até *</Label>
+                    <DatePicker
+                      selected={form.repeatUntil}
+                      onChange={(d: Date | null) =>
+                        setForm({ ...form, repeatUntil: d })
+                      }
+                      dateFormat="dd/MM/yyyy"
+                      locale="pt-BR"
+                      minDate={form.startAt}
+                      placeholderText="dd/mm/aaaa"
+                      className={dpInput}
+                      wrapperClassName="w-full"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </form>
-        </div>
+        </Modal>
       )}
 
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid #cbd5e1;
-          padding: 0.5rem 0.75rem;
-          outline: none;
-          background: white;
-        }
-        .input:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 2px #bfdbfe;
-        }
-      `}</style>
+      {/* Confirmação: excluir evento */}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Excluir evento"
+          message={`Excluir o evento "${confirmDelete.title}"?`}
+          confirmLabel="Excluir"
+          danger
+          busy={removing}
+          onConfirm={() => remove(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {/* Confirmação: excluir série */}
+      {confirmDeleteSeries && (
+        <ConfirmDialog
+          title="Excluir série"
+          message={`Excluir TODA a série de "${confirmDeleteSeries.title}"? Todas as ocorrências (passadas e futuras) serão removidas.`}
+          confirmLabel="Excluir série"
+          danger
+          busy={removing}
+          onConfirm={() => removeSeries(confirmDeleteSeries)}
+          onCancel={() => setConfirmDeleteSeries(null)}
+        />
+      )}
     </div>
   );
 }

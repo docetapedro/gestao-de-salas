@@ -43,7 +43,7 @@ export type ProjectForIndicators = {
   taxaAprovacao?: number | null;
   avalFormador?: number | null;
   reclamacoes?: number | null;
-  participantes: unknown[];
+  participantes: { quantidade?: number | null; concluidos?: number | null }[];
   financeiro: FinanceiroItemLike[];
 };
 
@@ -72,7 +72,11 @@ export type Financeiro = {
 
 /** Calcula todos os indicadores derivados de um projecto. */
 export function calcularIndicadores(p: ProjectForIndicators) {
-  const inscritos = p.participantes.length;
+  const inscritos = p.participantes.reduce((sum, x) => sum + (x.quantidade ?? 1), 0);
+  const concluidos = p.participantes.reduce((sum, x) => sum + (x.concluidos ?? 0), 0);
+  // Taxa de conclusão derivada dos participantes; se não houver, usa o valor guardado.
+  const taxaConclusaoReal =
+    inscritos > 0 ? (concluidos / inscritos) * 100 : p.taxaConclusao ?? null;
   const receita = somaPor(p.financeiro, "RECEITA");
   const custo = somaPor(p.financeiro, "CUSTO");
 
@@ -90,10 +94,12 @@ export function calcularIndicadores(p: ProjectForIndicators) {
   // Custo por formando = Investimento Total (custo previsto) / nº de inscritos.
   const custoPorFormando = inscritos > 0 ? custo.previsto / inscritos : null;
 
-  // Break-even: nº de formandos para cobrir o custo, à receita média por formando.
-  const receitaPorFormando = inscritos > 0 ? receita.realizado / inscritos : 0;
+  // Break-even: nº de formandos para cobrir o custo — é uma projeção do PLANO,
+  // por isso usa valores previstos (à receita prevista por formando), coerente
+  // com o "Custo por Formando". Divide pela soma das quantidades (inscritos).
+  const receitaPorFormando = inscritos > 0 ? receita.previsto / inscritos : 0;
   const breakEvenFormandos =
-    receitaPorFormando > 0 ? Math.ceil(custo.realizado / receitaPorFormando) : null;
+    receitaPorFormando > 0 ? Math.ceil(custo.previsto / receitaPorFormando) : null;
 
   const custoRealizadoPct =
     custo.previsto > 0 ? (custo.realizado / custo.previsto) * 100 : null;
@@ -110,14 +116,14 @@ export function calcularIndicadores(p: ProjectForIndicators) {
 
   const qualidade = {
     nps: statusMeta(p.nps, METAS.nps.cmp),
-    taxaConclusao: statusMeta(p.taxaConclusao, METAS.taxaConclusao.cmp),
+    taxaConclusao: statusMeta(taxaConclusaoReal, METAS.taxaConclusao.cmp),
     taxaPresenca: statusMeta(p.taxaPresenca, METAS.taxaPresenca.cmp),
     taxaAprovacao: statusMeta(p.taxaAprovacao, METAS.taxaAprovacao.cmp),
     avalFormador: statusMeta(p.avalFormador, METAS.avalFormador.cmp),
     reclamacoes: statusMeta(p.reclamacoes ?? 0, METAS.reclamacoes.cmp),
   };
 
-  return { inscritos, financeiro, qualidade };
+  return { inscritos, concluidos, financeiro, qualidade };
 }
 
 function statusMeta(

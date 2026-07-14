@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import {
@@ -12,9 +12,29 @@ import {
   formatPct,
   type Nivel,
 } from "@/lib/projetos";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import GestaoTurmas, {
+  type Rubrica as RubricaTipo,
+  type Turma,
+} from "@/components/GestaoTurmas";
+import {
+  Users,
+  GraduationCap,
+  Gauge,
+  Wallet,
+  TrendingUp,
+  ClipboardList,
+  Coins,
+  Award,
+  type LucideIcon,
+} from "lucide-react";
 
 type Indicadores = {
   inscritos: number;
+  concluidos: number;
   financeiro: {
     receita: { previsto: number; realizado: number };
     custo: { previsto: number; realizado: number };
@@ -32,6 +52,7 @@ type Indicadores = {
 
 type Projeto = {
   id: string;
+  codigo: string | null;
   nome: string;
   segmentoMercado: string | null;
   codigoTurma: string | null;
@@ -53,8 +74,9 @@ type Projeto = {
   pilar: { nome: string } | null;
   local: { name: string } | null;
   formadores: { formador: { nome: string; tipo: string } }[];
-  participantes: { origem: string | null; tipo: string }[];
+  participantes: { origem: string | null; tipo: string; quantidade: number; concluidos: number }[];
   financeiro: { previsto: number; realizado: number; rubrica: { nome: string; tipo: string } }[];
+  turmas: Turma[];
 };
 
 const fDate = (v: string | null) =>
@@ -68,32 +90,44 @@ export default function RelatorioPage({
   const { id } = use(params);
   const [projeto, setProjeto] = useState<Projeto | null>(null);
   const [ind, setInd] = useState<Indicadores | null>(null);
+  const [rubricas, setRubricas] = useState<RubricaTipo[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api<{ projeto: Projeto; indicadores: Indicadores }>(`/api/projetos/${id}`)
-      .then((d) => {
-        setProjeto(d.projeto);
-        setInd(d.indicadores);
-      })
-      .catch((e) => setError((e as Error).message));
+  const carregar = useCallback(async () => {
+    const d = await api<{ projeto: Projeto; indicadores: Indicadores }>(
+      `/api/projetos/${id}`
+    );
+    setProjeto(d.projeto);
+    setInd(d.indicadores);
   }, [id]);
+
+  useEffect(() => {
+    carregar().catch((e) => setError((e as Error).message));
+    api<{ rubricas: RubricaTipo[] }>("/api/rubricas")
+      .then((d) => setRubricas(d.rubricas))
+      .catch(() => {});
+  }, [carregar]);
 
   if (error)
     return (
-      <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
+      <div className="rounded-lg bg-destructive/10 text-destructive text-sm px-3 py-2 border border-destructive/20">
         {error}
       </div>
     );
-  if (!projeto || !ind) return <div className="text-slate-400">Carregando…</div>;
+  if (!projeto || !ind)
+    return <div className="text-muted-foreground">Carregando…</div>;
 
   const fin = ind.financeiro;
 
   // Participantes agrupados por origem.
-  const porOrigem = new Map<string, number>();
+  const porOrigem = new Map<string, { inscritos: number; concluidos: number }>();
   projeto.participantes.forEach((p) => {
     const k = p.origem?.trim() || "Sem origem";
-    porOrigem.set(k, (porOrigem.get(k) || 0) + 1);
+    const cur = porOrigem.get(k) || { inscritos: 0, concluidos: 0 };
+    porOrigem.set(k, {
+      inscritos: cur.inscritos + (p.quantidade ?? 1),
+      concluidos: cur.concluidos + (p.concluidos ?? 0),
+    });
   });
 
   const receitasFin = projeto.financeiro.filter((f) => f.rubrica.tipo === "RECEITA");
@@ -101,64 +135,93 @@ export default function RelatorioPage({
 
   return (
     <div>
-      {/* Barra de ações (não imprime) */}
-      <div className="no-print flex items-center justify-between mb-4">
-        <Link href="/projetos" className="text-sm text-brand-600 hover:underline">
+      {/* Voltar (não imprime) */}
+      <div className="no-print mb-3">
+        <Link
+          href="/projetos"
+          className="text-sm text-brand-600 hover:underline"
+        >
           ← Projectos
         </Link>
-        <div className="flex gap-2">
-          <Link
-            href={`/projetos/${id}/editar`}
-            className="rounded-lg bg-white border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-          >
-            Editar
-          </Link>
-          <button
-            onClick={() => window.print()}
-            className="rounded-lg bg-navy text-white px-4 py-2 text-sm font-semibold hover:bg-navy-light"
-          >
-            Imprimir / PDF
-          </button>
-        </div>
       </div>
 
+      {/* Gestão de turmas e lançamentos (não imprime).
+          Editar/Imprimir vão na mesma linha do "Nova turma". */}
+      <GestaoTurmas
+        projetoId={projeto.id}
+        turmas={projeto.turmas}
+        rubricas={rubricas}
+        onReload={carregar}
+        extraActions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/projetos/${id}/editar`}>Editar</Link>
+            </Button>
+            <Button variant="navy" size="sm" onClick={() => window.print()}>
+              Imprimir / PDF
+            </Button>
+          </>
+        }
+      />
+
       {/* Folha do relatório */}
-      <div className="print-area bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mx-auto max-w-[1100px]">
+      <Card className="print-area w-full rounded-2xl p-6">
         {/* Cabeçalho */}
-        <div className="flex items-start justify-between border-b border-slate-200 pb-3 mb-4">
+        <div className="mb-5 flex items-center justify-between gap-4 rounded-xl bg-gradient-to-r from-navy via-navy to-navy-light px-5 py-4 text-white print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/Logo.png" alt="Logo" className="h-9 object-contain" />
-            <div>
-              <h1 className="text-lg font-bold text-navy leading-tight">
+            <img
+              src="/Logo1.png"
+              alt="Logo"
+              className="h-10 object-contain"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "/Logo.png";
+              }}
+            />
+            <div className="border-l border-white/20 pl-3">
+              <h1 className="text-xl font-bold leading-tight tracking-tight">
                 RELATÓRIO DE FORMAÇÃO
               </h1>
-              <p className="text-xs text-slate-500">One Page Report · por Formação</p>
+              <p className="text-xs text-brand-100">{projeto.nome}</p>
             </div>
           </div>
-          <div className="text-right text-xs text-slate-500">
-            <div>{projeto.nome}</div>
-            <div>{fDate(projeto.dataInicio)}</div>
+          <div className="text-right">
+            {projeto.codigo && (
+              <div className="inline-block rounded-md bg-white/15 px-2.5 py-0.5 text-sm font-semibold tracking-wide">
+                {projeto.codigo}
+              </div>
+            )}
+            <div className="mt-1 text-[11px] text-brand-100">
+              {fDate(projeto.dataInicio)} — {fDate(projeto.dataFim)}
+            </div>
           </div>
         </div>
 
         {/* Cartões KPI */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-          <Kpi label="Formandos Inscritos" value={String(ind.inscritos)} />
+          <Kpi label="Formandos Inscritos" value={String(ind.inscritos)} Icon={Users} />
           <Kpi
             label="Taxa de Conclusão"
             value={formatPct(ind.qualidade.taxaConclusao.valor, 0)}
+            Icon={GraduationCap}
             ok={ind.qualidade.taxaConclusao.atingiu}
           />
           <Kpi
             label="NPS da Formação"
             value={ind.qualidade.nps.valor?.toString() ?? "—"}
+            Icon={Gauge}
             ok={ind.qualidade.nps.atingiu}
           />
-          <Kpi label="Receita Gerada" value={formatAOA(fin.receita.realizado)} green />
+          <Kpi
+            label="Receita Gerada"
+            value={formatAOA(fin.receita.realizado)}
+            Icon={Wallet}
+            green
+          />
           <Kpi
             label="ROI Previsto"
             value={fin.roiPct === null ? "—" : formatPct(fin.roiPct, 0)}
+            Icon={TrendingUp}
             ok={fin.roiPct === null ? null : fin.roiPct >= 0}
           />
         </div>
@@ -166,10 +229,18 @@ export default function RelatorioPage({
         {/* Três colunas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Identificação & Público */}
-          <Bloco titulo="Identificação & Público">
+          <Bloco titulo="Identificação & Público" Icon={ClipboardList}>
             <Sub>Dados da Formação</Sub>
-            <Linha k="Nome da Formação" v={projeto.nome} />
-            <Linha k="Código da Turma" v={projeto.codigoTurma || "—"} />
+            <Linha k="Código do Projecto" v={projeto.codigo || "—"} />
+            <Linha k="Nome do Projecto" v={projeto.nome} />
+            <Linha
+              k={projeto.turmas.length > 1 ? "Turmas" : "Turma"}
+              v={
+                projeto.turmas.length
+                  ? projeto.turmas.map((t) => t.codigo || "—").join(", ")
+                  : projeto.codigoTurma || "—"
+              }
+            />
             <Linha k="Segmento de Mercado" v={projeto.segmentoMercado || "—"} />
             <Linha k="Pilar" v={projeto.pilar?.nome || "—"} />
             <Linha k="Data de Início" v={fDate(projeto.dataInicio)} />
@@ -198,12 +269,14 @@ export default function RelatorioPage({
             <div className="text-sm">
               <div className="flex justify-between text-xs text-slate-400 font-medium pb-1">
                 <span>Empresa / Departamento</span>
-                <span>Inscritos</span>
+                <span>Inscritos / Concl.</span>
               </div>
-              {[...porOrigem.entries()].map(([origem, qtd]) => (
+              {[...porOrigem.entries()].map(([origem, v]) => (
                 <div key={origem} className="flex justify-between py-0.5">
                   <span className="text-slate-700">{origem}</span>
-                  <span className="text-slate-700 font-medium">{qtd}</span>
+                  <span className="text-slate-700 font-medium">
+                    {v.inscritos} / {v.concluidos}
+                  </span>
                 </div>
               ))}
               {porOrigem.size === 0 && (
@@ -213,7 +286,7 @@ export default function RelatorioPage({
           </Bloco>
 
           {/* Financeiro & ROI */}
-          <Bloco titulo="Financeiro & ROI">
+          <Bloco titulo="Financeiro & ROI" Icon={Coins}>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-slate-400 text-left">
@@ -264,7 +337,7 @@ export default function RelatorioPage({
           </Bloco>
 
           {/* Qualidade & Avaliação */}
-          <Bloco titulo="Qualidade & Avaliação">
+          <Bloco titulo="Qualidade & Avaliação" Icon={Award}>
             <Sub>Indicadores de Qualidade</Sub>
             <table className="w-full text-xs">
               <thead>
@@ -319,67 +392,107 @@ export default function RelatorioPage({
             <Crit k="Aplicabilidade Prática" v={projeto.avAplicabilidade} />
 
             <Sub>Comentários / Observações</Sub>
-            <p className="text-xs text-slate-600 whitespace-pre-wrap min-h-[2rem]">
+            <p className="text-xs text-slate-700 whitespace-pre-wrap min-h-[2rem]">
               {projeto.comentarios || "—"}
             </p>
           </Bloco>
         </div>
 
         {/* Rodapé */}
-        <div className="flex items-center justify-between border-t border-slate-200 mt-5 pt-3 text-[11px] text-slate-400">
+        <div className="flex items-center justify-between border-t border-slate-200 mt-5 pt-3 text-[11px] text-muted-foreground">
           <span>Confidencial · Academia TIS</span>
           <span>
             Responsável Pedagógica: {projeto.responsavelPedagogica || "—"}
           </span>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
 
 /* ------------------------------ Componentes ------------------------------- */
 
+const KPI_TONES = {
+  slate: { bg: "bg-slate-100", icon: "text-slate-500", ring: "ring-slate-200", accent: "from-slate-500/10", value: "text-navy" },
+  indigo: { bg: "bg-brand-50", icon: "text-brand-600", ring: "ring-brand-100", accent: "from-brand-500/10", value: "text-navy" },
+  emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", ring: "ring-emerald-100", accent: "from-emerald-500/10", value: "text-emerald-700" },
+  rose: { bg: "bg-rose-50", icon: "text-rose-600", ring: "ring-rose-100", accent: "from-rose-500/10", value: "text-rose-700" },
+} as const;
+
 function Kpi({
   label,
   value,
+  Icon,
   ok,
   green,
 }: {
   label: string;
   value: string;
+  Icon: LucideIcon;
   ok?: boolean | null;
   green?: boolean;
 }) {
-  if (green) {
-    return (
-      <div className="rounded-xl border border-green-700 bg-green-600 px-3 py-2 text-center print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
-        <div className="text-lg font-bold text-white leading-tight">{value}</div>
-        <div className="text-[11px] text-green-50 leading-tight mt-0.5">{label}</div>
-      </div>
-    );
-  }
-  const ring =
-    ok === true ? "border-green-300" : ok === false ? "border-red-300" : "border-slate-200";
+  const toneName =
+    green || ok === true ? "emerald" : ok === false ? "rose" : "indigo";
+  const t = KPI_TONES[toneName];
   return (
-    <div className={`rounded-xl border ${ring} bg-slate-50 px-3 py-2 text-center`}>
-      <div className="text-lg font-bold text-navy leading-tight">{value}</div>
-      <div className="text-[11px] text-slate-500 leading-tight mt-0.5">{label}</div>
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent",
+          t.accent
+        )}
+      />
+      <div className="relative flex items-center gap-3">
+        <div
+          className={cn(
+            "grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-4",
+            t.bg,
+            t.ring
+          )}
+        >
+          <Icon size={18} className={t.icon} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {label}
+          </div>
+          <div className={cn("truncate text-lg font-extrabold leading-tight", t.value)}>
+            {value}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Bloco({
+  titulo,
+  Icon,
+  children,
+}: {
+  titulo: string;
+  Icon: LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
-      <div className="bg-navy text-white text-sm font-semibold px-3 py-2">{titulo}</div>
-      <div className="p-3 space-y-1">{children}</div>
-    </div>
+    <Card className="overflow-hidden">
+      <CardHeader className="flex-row items-center gap-2 space-y-0 bg-navy px-3 py-2 print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/10">
+          <Icon size={14} className="text-brand-100" />
+        </span>
+        <CardTitle className="text-sm font-semibold text-white">
+          {titulo}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-3 space-y-1">{children}</CardContent>
+    </Card>
   );
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-semibold uppercase text-brand-700 bg-brand-50 rounded px-2 py-1 mt-3 mb-1">
+    <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-50 rounded px-2 py-1 mt-3 mb-1 print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
       {children}
     </div>
   );
@@ -388,17 +501,22 @@ function Sub({ children }: { children: React.ReactNode }) {
 function Linha({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-2 text-sm py-0.5">
-      <span className="text-slate-500">{k}</span>
+      <span className="text-muted-foreground">{k}</span>
       <span className="text-slate-800 font-medium text-right">{v}</span>
     </div>
   );
 }
 
-// Classe de cor do desvio. Nas receitas, positivo (realizado > previsto) é bom;
-// nos custos é o contrário: gastar acima do previsto é mau.
+// Diz se o desvio é favorável. Nas receitas, positivo (realizado > previsto) é bom;
+// nos custos é o contrário: gastar abaixo do previsto é bom.
+function desvioBom(v: number | null, custo = false): boolean | null {
+  if (v === null || v === 0) return null;
+  return custo ? v < 0 : v > 0;
+}
+
 function desvioClass(v: number | null, custo = false): string {
-  if (v === null || v === 0) return "text-slate-600";
-  const bom = custo ? v < 0 : v > 0;
+  const bom = desvioBom(v, custo);
+  if (bom === null) return "text-slate-600";
   return bom ? "text-emerald-600" : "text-red-600";
 }
 
@@ -412,6 +530,10 @@ function FinLinha({
   custo?: boolean;
 }) {
   const desvio = desvioPct(f.previsto, f.realizado);
+  const bom = desvioBom(desvio, custo);
+  // Quando o desvio é favorável (verde), mostramos a magnitude sem sinal negativo.
+  const desvioMostrado =
+    bom === true && desvio !== null ? Math.abs(desvio) : desvio;
   return (
     <tr className="border-t border-slate-100">
       <td className="py-1 text-slate-600">{f.rubrica.nome}</td>
@@ -422,7 +544,7 @@ function FinLinha({
         {formatNum(f.realizado)}
       </td>
       <td className={`py-1 text-right ${desvioClass(desvio, custo)}`}>
-        {formatPct(desvio, 1)}
+        {formatPct(desvioMostrado, 1)}
       </td>
     </tr>
   );
@@ -445,17 +567,24 @@ function QualLinha({
       : pct
         ? formatPct(st.valor, 0)
         : st.valor.toLocaleString("pt-PT");
-  const cor =
+  const variant =
     st.atingiu === true
-      ? "text-green-600"
+      ? "success"
       : st.atingiu === false
-        ? "text-red-600"
-        : "text-slate-400";
+        ? "destructive"
+        : "secondary";
   return (
     <tr className="border-t border-slate-100">
       <td className="py-1 text-slate-600">{nome}</td>
-      <td className="py-1 text-slate-400">{meta}</td>
-      <td className={`py-1 text-right font-semibold ${cor}`}>{real}</td>
+      <td className="py-1 text-muted-foreground">{meta}</td>
+      <td className="py-1 text-right">
+        <Badge
+          variant={variant}
+          className="rounded-md px-1.5 py-0 font-semibold print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]"
+        >
+          {real}
+        </Badge>
+      </td>
     </tr>
   );
 }
@@ -463,7 +592,7 @@ function QualLinha({
 function Crit({ k, v }: { k: string; v: number | null }) {
   return (
     <div className="flex justify-between text-xs py-0.5">
-      <span className="text-slate-600">{k}</span>
+      <span className="text-muted-foreground">{k}</span>
       <span className="text-slate-800 font-medium">
         {v === null || v === undefined ? "N/A" : v.toLocaleString("pt-PT")}
       </span>

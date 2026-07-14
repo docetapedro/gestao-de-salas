@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { ptBR } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
+import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 registerLocale("pt-BR", ptBR);
 
@@ -95,6 +99,37 @@ function eventClasses(
     return "bg-yellow-400 hover:bg-yellow-500 text-slate-900 is-next ring-2 ring-yellow-300"; // a seguir
   }
   return "bg-blue-600 hover:bg-blue-700 text-white"; // agendado (futuro)
+}
+
+/* ---------------------------------- legenda ----------------------------------- */
+const LEGEND: { dot: string; label: string; isNext?: boolean }[] = [
+  { dot: "bg-green-400", label: "livre" },
+  { dot: "bg-red-600", label: "ocupada agora" },
+  { dot: "bg-yellow-400 ring-2 ring-yellow-300", label: "a seguir", isNext: true },
+  { dot: "bg-blue-600", label: "agendado" },
+  { dot: "bg-slate-300", label: "encerrado" },
+];
+
+function Legend({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1", className)}>
+      {LEGEND.map((l) => (
+        <span
+          key={l.label}
+          className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-slate-600"
+        >
+          <span
+            className={cn(
+              "inline-block h-3 w-3 rounded",
+              l.dot,
+              l.isNext && "is-next"
+            )}
+          />
+          {l.label}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /* --------------------------------- componente --------------------------------- */
@@ -322,30 +357,34 @@ export default function RoomGrid() {
   }, [view, ref]);
 
   const viewSwitch = (
-    <div className="inline-flex rounded-lg bg-white border border-slate-300 p-0.5">
+    <div className="inline-flex rounded-lg bg-white border border-slate-300 p-0.5 shadow-sm">
       {([
         ["day", "Diária"],
         ["week", "Semanal"],
         ["month", "Mensal"],
       ] as [View, string][]).map(([v, label]) => (
-        <button
+        <Button
           key={v}
+          type="button"
+          variant={view === v ? "navy" : "ghost"}
+          size="sm"
           onClick={() => setView(v)}
-          className={`px-3 h-8 rounded-md text-sm font-medium transition ${
-            view === v ? "bg-navy text-white" : "text-slate-600 hover:bg-slate-100"
-          }`}
+          className={cn(
+            "h-8 rounded-md",
+            view === v ? "" : "text-slate-600 hover:bg-slate-100"
+          )}
         >
           {label}
-        </button>
+        </Button>
       ))}
     </div>
   );
 
   const body =
     loading && firstLoad.current ? (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center text-slate-400">
+      <Card className="p-8 text-center text-slate-400 rounded-2xl">
         Carregando…
-      </div>
+      </Card>
     ) : view === "day" ? (
       <DayView
         date={date}
@@ -410,32 +449,16 @@ export default function RoomGrid() {
               <div className="text-4xl font-bold text-navy tabular-nums leading-none">
                 {clock}
               </div>
-              <div className="text-xs text-slate-500 mt-1 flex items-center justify-end gap-3">
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded bg-green-400" /> livre
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded bg-red-600" /> ocupada agora
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="is-next inline-block h-3 w-3 rounded bg-yellow-400 ring-2 ring-yellow-300" />{" "}
-                  a seguir
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded bg-blue-600" /> agendado
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded bg-slate-300" /> encerrado
-                </span>
-              </div>
+              <Legend className="mt-1 justify-end text-xs" />
             </div>
-            <button
+            <Button
+              variant="navy"
+              size="lg"
               onClick={toggleKiosk}
-              className="h-10 px-4 rounded-lg bg-navy text-white text-sm font-semibold hover:bg-navy-light"
               title="Sair da tela cheia (Esc)"
             >
-              ✕ Sair
-            </button>
+              <X className="h-4 w-4" /> Sair
+            </Button>
           </div>
         </div>
         <div className="flex-1 min-h-0">{body}</div>
@@ -461,62 +484,48 @@ export default function RoomGrid() {
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Agenda de Ocupação</h1>
-          <p className="text-sm text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded bg-green-400" /> livre
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded bg-red-600" /> ocupada agora
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="is-next inline-block h-3 w-3 rounded bg-yellow-400 ring-2 ring-yellow-300" />{" "}
-              a seguir
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded bg-blue-600" /> agendado
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded bg-slate-300" /> encerrado
-            </span>
-          </p>
+          <Legend className="mt-1 text-sm" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {viewSwitch}
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => shift(-1)}
-            className="h-9 w-9 rounded-lg bg-white border border-slate-300 hover:bg-slate-50"
             aria-label="Anterior"
           >
-            ‹
-          </button>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
           <DatePicker
             selected={ref}
             onChange={(d: Date | null) => d && setDate(ymd(d))}
             dateFormat="dd/MM/yyyy"
             locale="pt-BR"
-            className="rounded-lg border border-slate-300 px-3 h-9 w-32 text-sm text-center"
+            className="rounded-md border border-input bg-background px-3 h-9 w-32 text-sm text-center shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           />
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => shift(1)}
-            className="h-9 w-9 rounded-lg bg-white border border-slate-300 hover:bg-slate-50"
             aria-label="Próximo"
           >
-            ›
-          </button>
-          <button
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="default"
             onClick={() => setDate(ymd(new Date()))}
-            className="h-9 px-3 rounded-lg bg-brand-500 text-white text-sm font-medium hover:bg-brand-600"
+            className="bg-brand-500 hover:bg-brand-600"
           >
             Hoje
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="navy"
             onClick={toggleKiosk}
-            className="h-9 px-3 rounded-lg bg-navy text-white text-sm font-medium hover:bg-navy-light"
             title="Modo TV / recepção (tela cheia)"
           >
-            ⛶ Tela cheia
-          </button>
+            <Maximize2 className="h-4 w-4" /> Tela cheia
+          </Button>
         </div>
       </div>
 
@@ -525,7 +534,7 @@ export default function RoomGrid() {
       </div>
 
       {error && (
-        <div className="mb-3 rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
+        <div className="mb-3 rounded-md bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
           {error}
         </div>
       )}
@@ -618,7 +627,7 @@ function DayView({
   const labelW = kiosk ? "w-56" : "w-40";
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full">
+    <Card className="rounded-2xl overflow-hidden h-full">
       <div className="grid-scroll overflow-auto h-full">
         <div className={`${kiosk ? "h-full flex flex-col" : ""}`} style={{ minWidth: 900 }}>
           <div className="flex border-b border-slate-200 bg-slate-50">
@@ -739,7 +748,7 @@ function DayView({
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -785,7 +794,7 @@ function WeekView({
   const labelW = kiosk ? "w-56" : "w-40";
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full">
+    <Card className="rounded-2xl overflow-hidden h-full">
       <div className="grid-scroll overflow-auto h-full">
         <div className={`${kiosk ? "h-full flex flex-col" : ""}`} style={{ minWidth: 880 }}>
           <div className="flex border-b border-slate-200 bg-slate-50">
@@ -897,7 +906,7 @@ function WeekView({
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -951,7 +960,7 @@ function MonthView({
   const MAX = kiosk ? 4 : 3;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full flex flex-col">
+    <Card className="rounded-2xl overflow-hidden h-full flex flex-col">
       <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-200">
         {WEEKDAYS.map((w) => (
           <div
@@ -1042,7 +1051,7 @@ function MonthView({
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -1208,20 +1217,17 @@ function CreateEventModal({
           </div>
         </div>
         <div className="px-5 pb-5 flex gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={onClose}
-            className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium text-slate-700"
+            className="flex-1"
           >
             Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
-          >
+          </Button>
+          <Button type="submit" variant="navy" disabled={saving} className="flex-1">
             {saving ? "Salvando…" : "Salvar"}
-          </button>
+          </Button>
         </div>
       </form>
       <style jsx global>{`
@@ -1264,12 +1270,9 @@ function EventModal({ event, onClose }: { event: EventItem; onClose: () => void 
           {event.description && <ModalRow label="Descrição" value={event.description} />}
         </div>
         <div className="px-5 pb-5">
-          <button
-            onClick={onClose}
-            className="w-full rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium"
-          >
+          <Button variant="secondary" onClick={onClose} className="w-full">
             Fechar
-          </button>
+          </Button>
         </div>
       </div>
     </div>

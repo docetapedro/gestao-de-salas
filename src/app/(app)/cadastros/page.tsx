@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Modal, ConfirmDialog } from "@/components/Modal";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 type Tab = "clientes" | "pilares" | "formadores" | "rubricas";
 
@@ -13,74 +20,53 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "rubricas", label: "Rubricas (Custos/Receitas)" },
 ];
 
+const selectClass =
+  "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+
 export default function CadastrosPage() {
   const [tab, setTab] = useState<Tab>("clientes");
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-navy mb-1">Cadastros</h1>
-      <p className="text-sm text-slate-500 mb-1">
+      <p className="text-sm text-muted-foreground mb-1">
         Tabelas de apoio usadas pelos projectos.
       </p>
-      <p className="text-xs text-slate-400 mb-4">
+      <p className="text-xs text-muted-foreground mb-4">
         O “Local / Sala” dos projectos usa a página <b>Salas</b>.
       </p>
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${
-              tab === t.key
-                ? "bg-navy text-white"
-                : "bg-white border border-slate-300 text-slate-600 hover:border-navy"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+        <TabsList className="flex-wrap h-auto">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.key} value={t.key}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {tab === "clientes" && <Clientes />}
-      {tab === "pilares" && <Pilares />}
-      {tab === "formadores" && <Formadores />}
-      {tab === "rubricas" && <Rubricas />}
-
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid #cbd5e1;
-          padding: 0.5rem 0.75rem;
-          outline: none;
-          background: #fff;
-        }
-        .input:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 2px #bfdbfe;
-        }
-        .modal-input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid #cbd5e1;
-          padding: 0.5rem 0.75rem;
-          outline: none;
-        }
-        .modal-input:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 2px #bfdbfe;
-        }
-      `}</style>
+        <TabsContent value="clientes">
+          <Clientes />
+        </TabsContent>
+        <TabsContent value="pilares">
+          <Pilares />
+        </TabsContent>
+        <TabsContent value="formadores">
+          <Formadores />
+        </TabsContent>
+        <TabsContent value="rubricas">
+          <Rubricas />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
 
-function Card({ children }: { children: React.ReactNode }) {
+function SectionCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 max-w-2xl">
-      {children}
-    </div>
+    <Card className="max-w-2xl">
+      <CardContent className="p-5">{children}</CardContent>
+    </Card>
   );
 }
 
@@ -101,13 +87,18 @@ function RowActions({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex gap-3 text-sm">
-      <button onClick={onEdit} className="text-brand-600 hover:underline">
+    <div className="flex gap-1">
+      <Button variant="link" size="sm" className="h-auto px-1" onClick={onEdit}>
         Editar
-      </button>
-      <button onClick={onDelete} className="text-red-600 hover:underline">
+      </Button>
+      <Button
+        variant="link"
+        size="sm"
+        className="h-auto px-1 text-red-600"
+        onClick={onDelete}
+      >
         Excluir
-      </button>
+      </Button>
     </div>
   );
 }
@@ -121,30 +112,24 @@ function ModalFooter({
 }) {
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        className="flex-1"
         onClick={onCancel}
-        className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium text-slate-700"
       >
         Cancelar
-      </button>
-      <button
+      </Button>
+      <Button
         type="submit"
         form="edit-form"
+        variant="navy"
+        className="flex-1"
         disabled={saving}
-        className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
       >
         {saving ? "Salvando…" : "Guardar"}
-      </button>
+      </Button>
     </>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <label className="block text-sm font-medium text-slate-700 mb-1">
-      {children}
-    </label>
   );
 }
 
@@ -229,45 +214,42 @@ function Clientes() {
   }
 
   return (
-    <Card>
+    <SectionCard>
       <ErrorBox msg={error} />
       <form onSubmit={add} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-        <input
-          className="input"
+        <Input
           placeholder="Nome do cliente"
           value={form.nome}
           onChange={(e) => setForm({ ...form, nome: e.target.value })}
         />
         <select
-          className="input"
+          className={selectClass}
           value={form.tipo}
           onChange={(e) => setForm({ ...form, tipo: e.target.value })}
         >
           <option value="B2C">B2C</option>
           <option value="B2B">B2B</option>
         </select>
-        <input
-          className="input"
+        <Input
           placeholder="Telefone"
           value={form.telefone}
           onChange={(e) => setForm({ ...form, telefone: e.target.value })}
         />
-        <input
-          className="input"
+        <Input
           placeholder="Email"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
-        <button className="rounded-lg bg-navy text-white px-4 py-2 text-sm font-semibold sm:col-span-2">
+        <Button type="submit" variant="navy" className="sm:col-span-2">
           Adicionar cliente
-        </button>
+        </Button>
       </form>
       <ul className="divide-y divide-slate-100">
         {items.map((c) => (
           <li key={c.id} className="flex items-center justify-between py-2 text-sm">
             <span className="text-slate-700">
               {c.nome}
-              <span className="ml-2 text-xs text-slate-400">
+              <span className="ml-2 text-xs text-muted-foreground">
                 {c.tipo}
                 {c.email ? ` · ${c.email}` : ""}
               </span>
@@ -275,7 +257,9 @@ function Clientes() {
             <RowActions onEdit={() => openEdit(c)} onDelete={() => setToDelete(c)} />
           </li>
         ))}
-        {items.length === 0 && <li className="py-2 text-slate-400 text-sm">Vazio.</li>}
+        {items.length === 0 && (
+          <li className="py-2 text-muted-foreground text-sm">Vazio.</li>
+        )}
       </ul>
 
       {editing && (
@@ -287,9 +271,9 @@ function Clientes() {
           <form id="edit-form" onSubmit={saveEdit} className="space-y-3">
             <div>
               <Label>Nome</Label>
-              <input
+              <Input
                 autoFocus
-                className="modal-input"
+                className="mt-1"
                 value={edit.nome}
                 onChange={(e) => setEdit({ ...edit, nome: e.target.value })}
               />
@@ -297,7 +281,7 @@ function Clientes() {
             <div>
               <Label>Tipo</Label>
               <select
-                className="modal-input"
+                className={cn(selectClass, "mt-1")}
                 value={edit.tipo}
                 onChange={(e) => setEdit({ ...edit, tipo: e.target.value })}
               >
@@ -307,24 +291,24 @@ function Clientes() {
             </div>
             <div>
               <Label>Telefone</Label>
-              <input
-                className="modal-input"
+              <Input
+                className="mt-1"
                 value={edit.telefone}
                 onChange={(e) => setEdit({ ...edit, telefone: e.target.value })}
               />
             </div>
             <div>
               <Label>Email</Label>
-              <input
-                className="modal-input"
+              <Input
+                className="mt-1"
                 value={edit.email}
                 onChange={(e) => setEdit({ ...edit, email: e.target.value })}
               />
             </div>
             <div>
               <Label>Descrição</Label>
-              <textarea
-                className="modal-input"
+              <Textarea
+                className="mt-1"
                 rows={2}
                 value={edit.descricao}
                 onChange={(e) => setEdit({ ...edit, descricao: e.target.value })}
@@ -349,7 +333,7 @@ function Clientes() {
           onCancel={() => setToDelete(null)}
         />
       )}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -421,18 +405,17 @@ function Pilares() {
   }
 
   return (
-    <Card>
+    <SectionCard>
       <ErrorBox msg={error} />
       <form onSubmit={add} className="flex gap-2 mb-4">
-        <input
-          className="input"
+        <Input
           placeholder="Nome do pilar"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
         />
-        <button className="rounded-lg bg-navy text-white px-4 text-sm font-semibold whitespace-nowrap">
+        <Button type="submit" variant="navy" className="whitespace-nowrap">
           Adicionar
-        </button>
+        </Button>
       </form>
       <ul className="divide-y divide-slate-100">
         {items.map((p) => (
@@ -441,7 +424,9 @@ function Pilares() {
             <RowActions onEdit={() => openEdit(p)} onDelete={() => setToDelete(p)} />
           </li>
         ))}
-        {items.length === 0 && <li className="py-2 text-slate-400 text-sm">Vazio.</li>}
+        {items.length === 0 && (
+          <li className="py-2 text-muted-foreground text-sm">Vazio.</li>
+        )}
       </ul>
 
       {editing && (
@@ -452,9 +437,9 @@ function Pilares() {
         >
           <form id="edit-form" onSubmit={saveEdit}>
             <Label>Nome</Label>
-            <input
+            <Input
               autoFocus
-              className="modal-input"
+              className="mt-1"
               value={editNome}
               onChange={(e) => setEditNome(e.target.value)}
             />
@@ -478,7 +463,7 @@ function Pilares() {
           onCancel={() => setToDelete(null)}
         />
       )}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -561,45 +546,42 @@ function Formadores() {
   }
 
   return (
-    <Card>
+    <SectionCard>
       <ErrorBox msg={error} />
       <form onSubmit={add} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-        <input
-          className="input"
+        <Input
           placeholder="Nome"
           value={form.nome}
           onChange={(e) => setForm({ ...form, nome: e.target.value })}
         />
         <select
-          className="input"
+          className={selectClass}
           value={form.tipo}
           onChange={(e) => setForm({ ...form, tipo: e.target.value })}
         >
           <option value="INTERNO">Interno</option>
           <option value="EXTERNO">Externo</option>
         </select>
-        <input
-          className="input"
+        <Input
           placeholder="Telefone"
           value={form.telefone}
           onChange={(e) => setForm({ ...form, telefone: e.target.value })}
         />
-        <input
-          className="input"
+        <Input
           placeholder="Email"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
-        <button className="rounded-lg bg-navy text-white px-4 py-2 text-sm font-semibold sm:col-span-2">
+        <Button type="submit" variant="navy" className="sm:col-span-2">
           Adicionar formador
-        </button>
+        </Button>
       </form>
       <ul className="divide-y divide-slate-100">
         {items.map((f) => (
           <li key={f.id} className="flex items-center justify-between py-2 text-sm">
             <span className="text-slate-700">
               {f.nome}
-              <span className="ml-2 text-xs text-slate-400">
+              <span className="ml-2 text-xs text-muted-foreground">
                 {f.tipo === "EXTERNO" ? "Externo" : "Interno"}
                 {f.email ? ` · ${f.email}` : ""}
               </span>
@@ -607,7 +589,9 @@ function Formadores() {
             <RowActions onEdit={() => openEdit(f)} onDelete={() => setToDelete(f)} />
           </li>
         ))}
-        {items.length === 0 && <li className="py-2 text-slate-400 text-sm">Vazio.</li>}
+        {items.length === 0 && (
+          <li className="py-2 text-muted-foreground text-sm">Vazio.</li>
+        )}
       </ul>
 
       {editing && (
@@ -619,9 +603,9 @@ function Formadores() {
           <form id="edit-form" onSubmit={saveEdit} className="space-y-3">
             <div>
               <Label>Nome</Label>
-              <input
+              <Input
                 autoFocus
-                className="modal-input"
+                className="mt-1"
                 value={edit.nome}
                 onChange={(e) => setEdit({ ...edit, nome: e.target.value })}
               />
@@ -629,7 +613,7 @@ function Formadores() {
             <div>
               <Label>Tipo</Label>
               <select
-                className="modal-input"
+                className={cn(selectClass, "mt-1")}
                 value={edit.tipo}
                 onChange={(e) => setEdit({ ...edit, tipo: e.target.value })}
               >
@@ -639,16 +623,16 @@ function Formadores() {
             </div>
             <div>
               <Label>Telefone</Label>
-              <input
-                className="modal-input"
+              <Input
+                className="mt-1"
                 value={edit.telefone}
                 onChange={(e) => setEdit({ ...edit, telefone: e.target.value })}
               />
             </div>
             <div>
               <Label>Email</Label>
-              <input
-                className="modal-input"
+              <Input
+                className="mt-1"
                 value={edit.email}
                 onChange={(e) => setEdit({ ...edit, email: e.target.value })}
               />
@@ -672,7 +656,7 @@ function Formadores() {
           onCancel={() => setToDelete(null)}
         />
       )}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -747,26 +731,26 @@ function Rubricas() {
   const custos = items.filter((r) => r.tipo === "CUSTO");
 
   return (
-    <Card>
+    <SectionCard>
       <ErrorBox msg={error} />
       <form onSubmit={add} className="flex flex-wrap gap-2 mb-4 items-center">
-        <input
-          className="input flex-1 min-w-[12rem]"
+        <Input
+          className="flex-1 min-w-[12rem]"
           placeholder="Nome da rubrica"
           value={form.nome}
           onChange={(e) => setForm({ ...form, nome: e.target.value })}
         />
         <select
-          className="input w-36"
+          className={cn(selectClass, "w-36")}
           value={form.tipo}
           onChange={(e) => setForm({ ...form, tipo: e.target.value })}
         >
           <option value="CUSTO">Custo</option>
           <option value="RECEITA">Receita</option>
         </select>
-        <button className="rounded-lg bg-navy text-white px-4 py-2 text-sm font-semibold">
+        <Button type="submit" variant="navy">
           Adicionar
-        </button>
+        </Button>
       </form>
 
       {[
@@ -774,7 +758,9 @@ function Rubricas() {
         { title: "Custos", list: custos },
       ].map((grp) => (
         <div key={grp.title} className="mb-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase mb-1">{grp.title}</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+            {grp.title}
+          </p>
           <ul className="divide-y divide-slate-100">
             {grp.list.map((r) => (
               <li key={r.id} className="flex items-center justify-between py-2 text-sm">
@@ -783,7 +769,7 @@ function Rubricas() {
               </li>
             ))}
             {grp.list.length === 0 && (
-              <li className="py-2 text-slate-400 text-sm">Vazio.</li>
+              <li className="py-2 text-muted-foreground text-sm">Vazio.</li>
             )}
           </ul>
         </div>
@@ -798,9 +784,9 @@ function Rubricas() {
           <form id="edit-form" onSubmit={saveEdit} className="space-y-3">
             <div>
               <Label>Nome</Label>
-              <input
+              <Input
                 autoFocus
-                className="modal-input"
+                className="mt-1"
                 value={edit.nome}
                 onChange={(e) => setEdit({ ...edit, nome: e.target.value })}
               />
@@ -808,7 +794,7 @@ function Rubricas() {
             <div>
               <Label>Tipo</Label>
               <select
-                className="modal-input"
+                className={cn(selectClass, "mt-1")}
                 value={edit.tipo}
                 onChange={(e) => setEdit({ ...edit, tipo: e.target.value })}
               >
@@ -835,6 +821,6 @@ function Rubricas() {
           onCancel={() => setToDelete(null)}
         />
       )}
-    </Card>
+    </SectionCard>
   );
 }

@@ -17,6 +17,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (body.name !== undefined) data.name = String(body.name).trim();
     if (body.email !== undefined)
       data.email = String(body.email).toLowerCase().trim();
+    if (body.username !== undefined) {
+      const username = body.username
+        ? String(body.username).toLowerCase().trim()
+        : null;
+      if (username) {
+        const uExists = await prisma.user.findFirst({
+          where: { OR: [{ username }, { email: username }], NOT: { id } },
+        });
+        if (uExists)
+          return json({ error: "Nome de utilizador já está em uso" }, 409);
+      }
+      data.username = username;
+    }
     if (body.role !== undefined && ROLES.includes(body.role))
       data.role = body.role;
     if (body.notify !== undefined) data.notify = Boolean(body.notify);
@@ -42,6 +55,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         id: true,
         name: true,
         email: true,
+        username: true,
         role: true,
         notify: true,
         active: true,

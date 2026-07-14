@@ -3,11 +3,34 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
+import { Modal, ConfirmDialog } from "@/components/Modal";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { toast } from "sonner";
 
 type User = {
   id: string;
   name: string;
   email: string;
+  username: string | null;
   role: Role;
   notify: boolean;
   active: boolean;
@@ -18,6 +41,7 @@ const emptyForm = {
   id: "",
   name: "",
   email: "",
+  username: "",
   password: "",
   role: "VIEWER" as Role,
   notify: true,
@@ -31,6 +55,8 @@ export default function UsuariosPage() {
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toDelete, setToDelete] = useState<User | null>(null);
+  const [busyDel, setBusyDel] = useState(false);
 
   async function load() {
     try {
@@ -58,6 +84,7 @@ export default function UsuariosPage() {
       id: u.id,
       name: u.name,
       email: u.email,
+      username: u.username ?? "",
       password: "",
       role: u.role,
       notify: u.notify,
@@ -75,6 +102,7 @@ export default function UsuariosPage() {
       const payload: Record<string, unknown> = {
         name: form.name,
         email: form.email,
+        username: form.username.trim() || null,
         role: form.role,
         notify: form.notify,
         active: form.active,
@@ -102,12 +130,15 @@ export default function UsuariosPage() {
   }
 
   async function remove(u: User) {
-    if (!confirm(`Excluir o usuário "${u.name}"?`)) return;
+    setBusyDel(true);
     try {
       await api(`/api/users/${u.id}`, { method: "DELETE" });
+      setToDelete(null);
       await load();
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
+    } finally {
+      setBusyDel(false);
     }
   }
 
@@ -120,12 +151,9 @@ export default function UsuariosPage() {
             Administradores recebem os avisos de evento por email.
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="rounded-lg bg-navy text-white px-4 py-2 text-sm font-semibold hover:bg-navy-light"
-        >
+        <Button variant="navy" onClick={openCreate}>
           + Novo usuário
-        </button>
+        </Button>
       </div>
 
       {error && !showForm && (
@@ -134,211 +162,227 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <Card className="overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-slate-400">Carregando…</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-left">
-              <tr>
-                <th className="px-4 py-3 font-medium">Nome</th>
-                <th className="px-4 py-3 font-medium">Email</th>
-                <th className="px-4 py-3 font-medium">Permissão</th>
-                <th className="px-4 py-3 font-medium">Avisos</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Permissão</TableHead>
+                <TableHead>Avisos</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {users.map((u) => (
-                <tr key={u.id} className="border-t border-slate-100">
-                  <td className="px-4 py-3 font-medium text-slate-800">
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium text-slate-800">
                     {u.name}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {u.email}
+                    {u.username && (
+                      <span className="block text-xs text-slate-400">
+                        @{u.username}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        u.role === "ADMIN"
+                          ? "default"
+                          : u.role === "MANAGER"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className={
                         u.role === "ADMIN"
                           ? "bg-navy text-white"
                           : u.role === "MANAGER"
                           ? "bg-brand-100 text-brand-700"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
+                          : "bg-slate-100 text-slate-600 border-transparent"
+                      }
                     >
                       {ROLE_LABELS[u.role]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-slate-600">
                     {u.role === "ADMIN" ? (u.notify ? "Sim" : "Não") : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        u.active
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={u.active ? "success" : "secondary"}>
                       {u.active ? "Ativo" : "Inativo"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-brand-600 h-auto p-0 mr-3"
                       onClick={() => openEdit(u)}
-                      className="text-brand-600 hover:underline mr-3"
                     >
                       Editar
-                    </button>
-                    <button
-                      onClick={() => remove(u)}
-                      className="text-red-600 hover:underline"
+                    </Button>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-red-600 h-auto p-0"
+                      onClick={() => setToDelete(u)}
                     >
                       Excluir
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
       {showForm && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
-          onClick={() => setShowForm(false)}
+        <Modal
+          title={form.id ? "Editar usuário" : "Novo usuário"}
+          onClose={() => setShowForm(false)}
+          footer={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowForm(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                form="user-form"
+                variant="navy"
+                disabled={saving}
+              >
+                {saving ? "Salvando…" : "Salvar"}
+              </Button>
+            </>
+          }
         >
-          <form
-            onSubmit={save}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
-          >
-            <div className="bg-navy text-white px-5 py-4 font-bold">
-              {form.id ? "Editar usuário" : "Novo usuário"}
+          <form id="user-form" onSubmit={save} className="space-y-3">
+            {error && (
+              <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
+                {error}
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="user-name">Nome *</Label>
+              <Input
+                id="user-name"
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </div>
-            <div className="p-5 space-y-3">
-              {error && (
-                <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
-                  {error}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nome *
-                </label>
-                <input
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Senha {form.id && "(deixe em branco para manter)"}
-                  {!form.id && " *"}
-                </label>
-                <input
-                  type="password"
-                  required={!form.id}
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                  className="input"
-                  placeholder={form.id ? "••••••••" : "mín. 6 caracteres"}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Permissão *
-                </label>
-                <select
-                  value={form.role}
-                  onChange={(e) =>
-                    setForm({ ...form, role: e.target.value as Role })
-                  }
-                  className="input"
-                >
-                  <option value="VIEWER">Visualizador — só vê a grade</option>
-                  <option value="MANAGER">
+            <div className="space-y-1">
+              <Label htmlFor="user-email">Email *</Label>
+              <Input
+                id="user-email"
+                type="email"
+                required
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="user-username">Nome de utilizador</Label>
+              <Input
+                id="user-username"
+                type="text"
+                autoCapitalize="none"
+                value={form.username}
+                onChange={(e) =>
+                  setForm({ ...form, username: e.target.value })
+                }
+                placeholder="opcional — login por email ou este nome"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="user-password">
+                Senha {form.id && "(deixe em branco para manter)"}
+                {!form.id && " *"}
+              </Label>
+              <Input
+                id="user-password"
+                type="password"
+                required={!form.id}
+                value={form.password}
+                onChange={(e) =>
+                  setForm({ ...form, password: e.target.value })
+                }
+                placeholder={form.id ? "••••••••" : "mín. 6 caracteres"}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="user-role">Permissão *</Label>
+              <Select
+                value={form.role}
+                onValueChange={(v) =>
+                  setForm({ ...form, role: v as Role })
+                }
+              >
+                <SelectTrigger id="user-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="VIEWER">
+                    Visualizador — só vê a grade
+                  </SelectItem>
+                  <SelectItem value="MANAGER">
                     Gestor — gerencia salas e eventos
-                  </option>
-                  <option value="ADMIN">
+                  </SelectItem>
+                  <SelectItem value="ADMIN">
                     Administrador — tudo + usuários + avisos
-                  </option>
-                </select>
-              </div>
-              {form.role === "ADMIN" && (
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={form.notify}
-                    onChange={(e) =>
-                      setForm({ ...form, notify: e.target.checked })
-                    }
-                  />
-                  Receber emails de aviso de evento
-                </label>
-              )}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.role === "ADMIN" && (
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
-                  checked={form.active}
+                  checked={form.notify}
                   onChange={(e) =>
-                    setForm({ ...form, active: e.target.checked })
+                    setForm({ ...form, notify: e.target.checked })
                   }
                 />
-                Usuário ativo
+                Receber emails de aviso de evento
               </label>
-            </div>
-            <div className="px-5 pb-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
-              >
-                {saving ? "Salvando…" : "Salvar"}
-              </button>
-            </div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(e) =>
+                  setForm({ ...form, active: e.target.checked })
+                }
+              />
+              Usuário ativo
+            </label>
           </form>
-        </div>
+        </Modal>
       )}
 
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid #cbd5e1;
-          padding: 0.5rem 0.75rem;
-          outline: none;
-          background: white;
-        }
-        .input:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 2px #bfdbfe;
-        }
-      `}</style>
+      {toDelete && (
+        <ConfirmDialog
+          title="Excluir usuário"
+          message={`Excluir o usuário "${toDelete.name}"?`}
+          confirmLabel="Excluir"
+          danger
+          busy={busyDel}
+          onConfirm={() => remove(toDelete)}
+          onCancel={() => setToDelete(null)}
+        />
+      )}
     </div>
   );
 }

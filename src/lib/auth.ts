@@ -51,13 +51,17 @@ export async function destroySession(): Promise<void> {
   store.delete(SESSION_COOKIE);
 }
 
-/** Autentica por email/senha. Retorna o payload da sessão ou null. */
+/**
+ * Autentica por email OU nome de utilizador (+ senha).
+ * Retorna o payload da sessão ou null.
+ */
 export async function authenticate(
-  email: string,
+  identifier: string,
   password: string
 ): Promise<SessionPayload | null> {
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+  const id = identifier.toLowerCase().trim();
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: id }, { username: id }] },
   });
   if (!user || !user.active) return null;
   const ok = await verifyPassword(password, user.password);

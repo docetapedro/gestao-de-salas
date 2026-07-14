@@ -4,11 +4,14 @@ import { json, handleError } from "@/lib/http";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      return json({ error: "Email e senha são obrigatórios" }, 400);
+    const body = await req.json();
+    // Aceita "identifier" (email ou username); mantém compat. com "email".
+    const identifier = String(body.identifier ?? body.email ?? "");
+    const password = body.password;
+    if (!identifier || !password) {
+      return json({ error: "Email/utilizador e senha são obrigatórios" }, 400);
     }
-    const session = await authenticate(email, password);
+    const session = await authenticate(identifier, password);
     if (!session) {
       return json({ error: "Credenciais inválidas" }, 401);
     }

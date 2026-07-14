@@ -18,6 +18,8 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  // Nome de utilizador opcional — permite login por email OU username.
+  username  String?  @unique
   password  String
   role      String   @default("VIEWER")
   notify    Boolean  @default(true)
@@ -103,6 +105,7 @@ model RubricaTipo {
 // Projecto / Formação — entidade central do relatório.
 model Project {
   id           String    @id @default(cuid())
+  codigo       String?   @unique // Código sequencial automático (ex.: PACT.0001)
   nome         String
   descricao    String?
   // Segmento de mercado (B2C, B2B, B2G). Coluna mantém o nome antigo para evitar migração destrutiva.
@@ -151,10 +154,29 @@ model Project {
   formadores    ProjectFormador[]
   participantes Participante[]
   financeiro    FinanceiroItem[]
+  turmas        Turma[]
 
   @@index([pilarId])
   @@index([localId])
   @@index([clienteId])
+}
+
+// Turma / edição de um projecto (formação). Um projecto pode ter várias turmas;
+// os lançamentos financeiros são feitos por turma.
+model Turma {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  codigo     String? // Identificação da turma (ex.: "T1", "2026-01")
+  nome       String?
+  dataInicio DateTime?
+  dataFim    DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  financeiro FinanceiroItem[]
+
+  @@index([projectId])
 }
 
 // Cliente / conta a quem a formação é prestada (ex.: "AUREA — B2C Particulares").
@@ -168,6 +190,8 @@ model Cliente {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   projects  Project[]
+  // Movimentos de stock (saídas) em que este cliente é o destino.
+  movimentosStock MovimentoStock[]
 }
 
 // Ligação N:N entre projecto e formadores (múltiplos formadores por projecto).
@@ -188,13 +212,17 @@ model Participante {
   id        String   @id @default(cuid())
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tipo      String   @default("B2C") // B2B | B2C
-  nome      String
-  origem    String? // Empresa / Departamento (agrupador de "Participantes por Origem")
+  tipo       String  @default("B2C") // B2B | B2C
+  nome       String? // opcional: rótulo/contacto do grupo
+  origem     String? // Empresa / Departamento (agrupador de "Participantes por Origem")
+  quantidade Int     @default(1) // nº de formandos representados por esta linha (grupo)
   descricao String?
   telefone  String?
   email     String?
-  concluido Boolean  @default(false)
+  concluidos Int     @default(0) // nº de formandos do grupo que concluíram (0..quantidade)
+  // DEPRECADO: substituído por `concluidos`. Mantido só para o deploy não
+  // apagar a coluna em produção (evita perda de dados no `db push`). Não usar.
+  concluido Boolean @default(false)
   createdAt DateTime @default(now())
 
   @@index([projectId])
@@ -205,10 +233,73 @@ model FinanceiroItem {
   id        String      @id @default(cuid())
   projectId String
   project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Turma a que o lançamento pertence (novos lançamentos são por turma).
+  turmaId   String?
+  turma     Turma?      @relation(fields: [turmaId], references: [id], onDelete: Cascade)
   rubricaId String
   rubrica   RubricaTipo @relation(fields: [rubricaId], references: [id], onDelete: Cascade)
   previsto  Float       @default(0)
   realizado Float       @default(0)
 
+  // Um registo por rubrica dentro da mesma turma.
+  @@unique([turmaId, rubricaId])
   @@index([projectId])
+  @@index([turmaId])
+}
+
+// ===========================================================================
+// Módulo: Controlo de Stock (entradas/saídas, produtos, fornecedores)
+// Baseado em Gestao_Stock.xlsx: Produto, Empresa (fornecedor/cliente),
+// Data, Movimento (Entrada/Saída), Quantidade, Remanescente (calculado).
+// ===========================================================================
+
+// Produto/artigo controlado em stock (ex.: "Canetas", "Agendas").
+// O stock actual é calculado a partir dos movimentos (Σentradas − Σsaídas).
+model Produto {
+  id          String   @id @default(cuid())
+  nome        String   @unique
+  unidade     String   @default("un") // unidade de medida (un, cx, kg, ...)
+  stockMinimo Int? // alerta de stock baixo (opcional)
+  descricao   String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  movimentos MovimentoStock[]
+}
+
+// Fornecedor — origem das entradas de stock (ex.: "TIS - MARKETING").
+model Fornecedor {
+  id        String   @id @default(cuid())
+  nome      String   @unique
+  telefone  String?
+  email     String?
+  descricao String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movimentos MovimentoStock[]
+}
+
+// Movimento de stock: entrada (de um fornecedor) ou saída (para um cliente).
+model MovimentoStock {
+  id         String   @id @default(cuid())
+  produtoId  String
+  produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  tipo       String // ENTRADA | SAIDA
+  quantidade Int
+  data       DateTime @default(now())
+
+  // Entrada → fornecedor; Saída → cliente (reutiliza a tabela Cliente dos Projectos).
+  fornecedorId String?
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  clienteId    String?
+  cliente      Cliente?    @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  observacao  String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([produtoId, data])
+  @@index([tipo])
 }

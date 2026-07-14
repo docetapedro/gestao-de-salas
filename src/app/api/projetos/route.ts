@@ -7,21 +7,27 @@ import {
   projectScalars,
   formadoresCreate,
   participantesCreate,
-  financeiroCreate,
+  turmasCreate,
+  nextProjectCodigo,
 } from "./_shared";
 
 export async function GET() {
   try {
     assertAuthenticated(await getSession());
-    const projetos = await prisma.project.findMany({
+    const rows = await prisma.project.findMany({
       orderBy: { createdAt: "desc" },
       include: {
         pilar: true,
         local: true,
         cliente: true,
-        _count: { select: { participantes: true } },
+        participantes: { select: { quantidade: true } },
       },
     });
+    // "Inscritos" = soma das quantidades dos grupos de participantes.
+    const projetos = rows.map(({ participantes, ...p }) => ({
+      ...p,
+      inscritos: participantes.reduce((sum, x) => sum + (x.quantidade ?? 1), 0),
+    }));
     return json({ projetos });
   } catch (err) {
     return handleError(err);
@@ -38,10 +44,11 @@ export async function POST(req: NextRequest) {
     const projeto = await prisma.project.create({
       data: {
         ...scalars,
+        codigo: await nextProjectCodigo(),
         createdById: session.sub,
         formadores: { create: formadoresCreate(body) },
         participantes: { create: participantesCreate(body) },
-        financeiro: { create: financeiroCreate(body) },
+        turmas: { create: turmasCreate(body) },
       },
     });
     return json({ projeto }, 201);

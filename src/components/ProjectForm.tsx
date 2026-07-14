@@ -4,18 +4,28 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { MODALIDADES, NIVEIS } from "@/lib/projetos";
+import DatePicker from "@/components/DatePicker";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+
+// Classe partilhada para os <select> nativos (mantidos por causa da opção "—"
+// com value="" e da sincronização de estado existente). Visual alinhado ao Input.
+const selectClass =
+  "flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 type Lookup = { id: string; nome: string };
 type Rubrica = { id: string; nome: string; tipo: string; ordem: number };
 type Formador = { id: string; nome: string; tipo: string };
 
 type Participante = {
-  nome: string;
-  tipo: string;
   origem: string;
-  telefone: string;
-  email: string;
-  concluido: boolean;
+  tipo: string;
+  quantidade: number;
+  concluidos: number;
 };
 
 export type ProjectInitial = {
@@ -99,12 +109,10 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
   );
   const [participantes, setParticipantes] = useState<Participante[]>(
     initial?.participantes.map((p) => ({
-      nome: p.nome,
-      tipo: p.tipo,
       origem: s(p.origem),
-      telefone: s(p.telefone),
-      email: s(p.email),
-      concluido: p.concluido,
+      tipo: p.tipo,
+      quantidade: p.quantidade ?? 1,
+      concluidos: p.concluidos ?? 0,
     })) ?? []
   );
   const [fin, setFin] = useState<Record<string, { previsto: string; realizado: string }>>(
@@ -142,6 +150,18 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
   const receitas = useMemo(() => rubricas.filter((r) => r.tipo === "RECEITA"), [rubricas]);
   const custos = useMemo(() => rubricas.filter((r) => r.tipo === "CUSTO"), [rubricas]);
 
+  // Totais dos participantes (grupos) e taxa de conclusão derivada.
+  const inscritosTotal = useMemo(
+    () => participantes.reduce((sum, p) => sum + (p.quantidade || 0), 0),
+    [participantes]
+  );
+  const concluidosTotal = useMemo(
+    () => participantes.reduce((sum, p) => sum + (p.concluidos || 0), 0),
+    [participantes]
+  );
+  const taxaConclusaoCalc =
+    inscritosTotal > 0 ? (concluidosTotal / inscritosTotal) * 100 : null;
+
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -156,7 +176,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
   function addParticipante() {
     setParticipantes((p) => [
       ...p,
-      { nome: "", tipo: "B2C", origem: "", telefone: "", email: "", concluido: false },
+      { origem: "", tipo: "B2C", quantidade: 1, concluidos: 0 },
     ]);
   }
   function updParticipante(i: number, patch: Partial<Participante>) {
@@ -183,7 +203,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
         ...form,
         duracaoHoras: form.duracaoHoras === "" ? null : Number(form.duracaoHoras),
         nps: form.nps === "" ? null : Number(form.nps),
-        taxaConclusao: form.taxaConclusao === "" ? null : Number(form.taxaConclusao),
+        taxaConclusao: taxaConclusaoCalc,
         taxaPresenca: form.taxaPresenca === "" ? null : Number(form.taxaPresenca),
         taxaAprovacao: form.taxaAprovacao === "" ? null : Number(form.taxaAprovacao),
         avalFormador: form.avalFormador === "" ? null : Number(form.avalFormador),
@@ -195,7 +215,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
         avAplicabilidade:
           form.avAplicabilidade === "" ? null : Number(form.avAplicabilidade),
         formadorIds,
-        participantes: participantes.filter((p) => p.nome.trim()),
+        participantes: participantes.filter((p) => p.origem.trim() && p.quantidade > 0),
         financeiro,
       };
 
@@ -230,32 +250,29 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
       {/* Identificação */}
       <Section title="Identificação & Público">
         <Grid>
-          <Field label="Nome da Formação *" full>
-            <input
+          <Field label="Nome do Projecto *" full>
+            <Input
               required
-              className="input"
               value={form.nome}
               onChange={(e) => set("nome", e.target.value)}
             />
           </Field>
           <Field label="Descrição" full>
-            <textarea
-              className="input"
+            <Textarea
               rows={2}
               value={form.descricao}
               onChange={(e) => set("descricao", e.target.value)}
             />
           </Field>
           <Field label="Código da Turma">
-            <input
-              className="input"
+            <Input
               value={form.codigoTurma}
               onChange={(e) => set("codigoTurma", e.target.value)}
             />
           </Field>
           <Field label="Segmento de Mercado">
             <select
-              className="input"
+              className={selectClass}
               value={form.segmentoMercado}
               onChange={(e) => set("segmentoMercado", e.target.value)}
             >
@@ -267,7 +284,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Field>
           <Field label="Pilar">
             <select
-              className="input"
+              className={selectClass}
               value={form.pilarId}
               onChange={(e) => set("pilarId", e.target.value)}
             >
@@ -281,7 +298,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Field>
           <Field label="Cliente">
             <select
-              className="input"
+              className={selectClass}
               value={form.clienteId}
               onChange={(e) => set("clienteId", e.target.value)}
             >
@@ -300,7 +317,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Field>
           <Field label="Local / Sala">
             <select
-              className="input"
+              className={selectClass}
               value={form.localId}
               onChange={(e) => set("localId", e.target.value)}
             >
@@ -313,34 +330,26 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
             </select>
           </Field>
           <Field label="Data de Início">
-            <input
-              type="date"
-              className="input"
+            <DatePicker
               value={form.dataInicio}
-              onChange={(e) => set("dataInicio", e.target.value)}
+              onChange={(v) => set("dataInicio", v)}
             />
           </Field>
           <Field label="Data de Fim">
-            <input
-              type="date"
-              className="input"
-              value={form.dataFim}
-              onChange={(e) => set("dataFim", e.target.value)}
-            />
+            <DatePicker value={form.dataFim} onChange={(v) => set("dataFim", v)} />
           </Field>
           <Field label="Duração (horas)">
-            <input
+            <Input
               type="number"
               step="0.5"
               min="0"
-              className="input"
               value={form.duracaoHoras}
               onChange={(e) => set("duracaoHoras", e.target.value)}
             />
           </Field>
           <Field label="Modalidade">
             <select
-              className="input"
+              className={selectClass}
               value={form.modalidade}
               onChange={(e) => set("modalidade", e.target.value)}
             >
@@ -354,7 +363,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Field>
           <Field label="Nível">
             <select
-              className="input"
+              className={selectClass}
               value={form.nivel}
               onChange={(e) => set("nivel", e.target.value)}
             >
@@ -367,8 +376,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
             </select>
           </Field>
           <Field label="Seleção do Formador">
-            <input
-              className="input"
+            <Input
               placeholder="Ex.: Múltipla escolha"
               value={form.selecaoFormador}
               onChange={(e) => set("selecaoFormador", e.target.value)}
@@ -378,6 +386,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
             <label className="flex items-center gap-2 text-sm text-slate-700 mt-1">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-navy focus:ring-2 focus:ring-ring"
                 checked={form.formadorInterno}
                 onChange={(e) => set("formadorInterno", e.target.checked)}
               />
@@ -402,11 +411,12 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
                         on ? ids.filter((x) => x !== f.id) : [...ids, f.id]
                       )
                     }
-                    className={`px-3 py-1.5 rounded-full text-sm border ${
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-sm border transition-colors",
                       on
                         ? "bg-navy text-white border-navy"
                         : "bg-white text-slate-600 border-slate-300 hover:border-navy"
-                    }`}
+                    )}
                   >
                     {f.nome}
                     <span className="opacity-60 ml-1 text-xs">
@@ -423,130 +433,122 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
       {/* Participantes */}
       <Section title="Participantes / Inscritos">
         <div className="space-y-2">
+          {participantes.length > 0 && (
+            <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <span className="col-span-5">Empresa / Origem</span>
+              <span className="col-span-2">Tipo</span>
+              <span className="col-span-2">Qtd</span>
+              <span className="col-span-2">Concluídos</span>
+              <span className="col-span-1" />
+            </div>
+          )}
           {participantes.map((p, i) => (
             <div
               key={i}
               className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center rounded-lg border border-slate-200 p-2"
             >
-              <input
-                className="input md:col-span-3"
-                placeholder="Nome"
-                value={p.nome}
-                onChange={(e) => updParticipante(i, { nome: e.target.value })}
+              <Input
+                className="md:col-span-5"
+                placeholder="Empresa / Origem"
+                value={p.origem}
+                onChange={(e) => updParticipante(i, { origem: e.target.value })}
               />
               <select
-                className="input md:col-span-2"
+                className={cn(selectClass, "md:col-span-2")}
                 value={p.tipo}
                 onChange={(e) => updParticipante(i, { tipo: e.target.value })}
               >
                 <option value="B2C">B2C</option>
                 <option value="B2B">B2B</option>
               </select>
-              <input
-                className="input md:col-span-3"
-                placeholder="Empresa / Origem"
-                value={p.origem}
-                onChange={(e) => updParticipante(i, { origem: e.target.value })}
+              <Input
+                type="number"
+                min={1}
+                className="md:col-span-2"
+                placeholder="Qtd"
+                title="Nº de formandos"
+                value={p.quantidade}
+                onChange={(e) => {
+                  const quantidade = Math.max(1, Number(e.target.value) || 1);
+                  updParticipante(i, {
+                    quantidade,
+                    concluidos: Math.min(p.concluidos, quantidade),
+                  });
+                }}
               />
-              <input
-                className="input md:col-span-2"
-                placeholder="Email"
-                value={p.email}
-                onChange={(e) => updParticipante(i, { email: e.target.value })}
+              <Input
+                type="number"
+                min={0}
+                max={p.quantidade}
+                className="md:col-span-2"
+                placeholder="Concluídos"
+                title="Nº de formandos que concluíram"
+                value={p.concluidos}
+                onChange={(e) =>
+                  updParticipante(i, {
+                    concluidos: Math.min(p.quantidade, Math.max(0, Number(e.target.value) || 0)),
+                  })
+                }
               />
-              <label className="flex items-center gap-1 text-xs text-slate-600 md:col-span-1">
-                <input
-                  type="checkbox"
-                  checked={p.concluido}
-                  onChange={(e) => updParticipante(i, { concluido: e.target.checked })}
-                />
-                Concl.
-              </label>
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => rmParticipante(i)}
-                className="text-red-600 text-sm md:col-span-1 hover:underline"
+                className="text-red-600 md:col-span-1 h-auto p-0 justify-start"
               >
                 Remover
-              </button>
+              </Button>
             </div>
           ))}
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={addParticipante}
-            className="rounded-lg bg-brand-50 text-brand-700 px-3 py-2 text-sm font-medium hover:bg-brand-100"
+            className="bg-brand-50 text-brand-700 hover:bg-brand-100"
           >
             + Adicionar participante
-          </button>
+          </Button>
         </div>
       </Section>
 
-      {/* Financeiro */}
+      {/* Financeiro — agora lançado por turma no detalhe do projecto */}
       <Section title="Financeiro & ROI">
-        {rubricas.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            Nenhuma rubrica cadastrada. Adicione rubricas de receita/custo em Cadastros.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-slate-500 text-left">
-                <tr>
-                  <th className="py-2 font-medium">Rubrica</th>
-                  <th className="py-2 font-medium w-40">Previsto (AOA)</th>
-                  <th className="py-2 font-medium w-40">Realizado (AOA)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receitas.length > 0 && (
-                  <tr>
-                    <td colSpan={3} className="pt-3 pb-1 text-xs font-semibold text-brand-700 uppercase">
-                      Receitas
-                    </td>
-                  </tr>
-                )}
-                {receitas.map((r) => (
-                  <FinRow key={r.id} r={r} fin={fin} onChange={setFinValue} />
-                ))}
-                <tr>
-                  <td colSpan={3} className="pt-3 pb-1 text-xs font-semibold text-slate-500 uppercase">
-                    Custos
-                  </td>
-                </tr>
-                {custos.map((r) => (
-                  <FinRow key={r.id} r={r} fin={fin} onChange={setFinValue} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+          Os lançamentos financeiros passaram a ser feitos <b>por turma</b>, na
+          página do projecto. Depois de guardar, abre o projecto e lança as
+          rubricas (previsto/realizado) na turma pretendida.
+        </div>
       </Section>
 
       {/* Qualidade */}
       <Section title="Qualidade & Avaliação">
         <Grid>
           <Field label="NPS da Formação (meta ≥ 70)">
-            <input className="input" type="number" step="0.1" value={form.nps}
+            <Input type="number" step="0.1" value={form.nps}
               onChange={(e) => set("nps", e.target.value)} />
           </Field>
-          <Field label="Taxa de Conclusão % (≥ 90)">
-            <input className="input" type="number" step="0.1" value={form.taxaConclusao}
-              onChange={(e) => set("taxaConclusao", e.target.value)} />
+          <Field label="Taxa de Conclusão % (calculada dos participantes)">
+            <Input
+              className="bg-slate-50 text-slate-500"
+              readOnly
+              title={`${concluidosTotal} concluídos de ${inscritosTotal} inscritos`}
+              value={taxaConclusaoCalc === null ? "—" : taxaConclusaoCalc.toFixed(1)}
+            />
           </Field>
           <Field label="Taxa de Presença % (≥ 85)">
-            <input className="input" type="number" step="0.1" value={form.taxaPresenca}
+            <Input type="number" step="0.1" value={form.taxaPresenca}
               onChange={(e) => set("taxaPresenca", e.target.value)} />
           </Field>
           <Field label="Taxa de Aprovação % (≥ 80)">
-            <input className="input" type="number" step="0.1" value={form.taxaAprovacao}
+            <Input type="number" step="0.1" value={form.taxaAprovacao}
               onChange={(e) => set("taxaAprovacao", e.target.value)} />
           </Field>
           <Field label="Aval. do Formador (≥ 4,3)">
-            <input className="input" type="number" step="0.1" value={form.avalFormador}
+            <Input type="number" step="0.1" value={form.avalFormador}
               onChange={(e) => set("avalFormador", e.target.value)} />
           </Field>
           <Field label="Reclamações / Incidentes (meta 0)">
-            <input className="input" type="number" step="1" value={form.reclamacoes}
+            <Input type="number" step="1" value={form.reclamacoes}
               onChange={(e) => set("reclamacoes", e.target.value)} />
           </Field>
         </Grid>
@@ -555,53 +557,54 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
         </p>
         <Grid>
           <Field label="Conteúdo / Relevância">
-            <input className="input" type="number" step="0.1" value={form.avConteudo}
+            <Input type="number" step="0.1" value={form.avConteudo}
               onChange={(e) => set("avConteudo", e.target.value)} />
           </Field>
           <Field label="Clareza do Formador">
-            <input className="input" type="number" step="0.1" value={form.avClareza}
+            <Input type="number" step="0.1" value={form.avClareza}
               onChange={(e) => set("avClareza", e.target.value)} />
           </Field>
           <Field label="Materiais de Apoio">
-            <input className="input" type="number" step="0.1" value={form.avMateriais}
+            <Input type="number" step="0.1" value={form.avMateriais}
               onChange={(e) => set("avMateriais", e.target.value)} />
           </Field>
           <Field label="Organização / Logística">
-            <input className="input" type="number" step="0.1" value={form.avOrganizacao}
+            <Input type="number" step="0.1" value={form.avOrganizacao}
               onChange={(e) => set("avOrganizacao", e.target.value)} />
           </Field>
           <Field label="Aplicabilidade Prática">
-            <input className="input" type="number" step="0.1" value={form.avAplicabilidade}
+            <Input type="number" step="0.1" value={form.avAplicabilidade}
               onChange={(e) => set("avAplicabilidade", e.target.value)} />
           </Field>
         </Grid>
         <Grid>
           <Field label="Comentários / Observações" full>
-            <textarea className="input" rows={3} value={form.comentarios}
+            <Textarea rows={3} value={form.comentarios}
               onChange={(e) => set("comentarios", e.target.value)} />
           </Field>
           <Field label="Responsável Pedagógica" full>
-            <input className="input" value={form.responsavelPedagogica}
+            <Input value={form.responsavelPedagogica}
               onChange={(e) => set("responsavelPedagogica", e.target.value)} />
           </Field>
         </Grid>
       </Section>
 
       <div className="flex gap-2 sticky bottom-0 bg-slate-100 py-3">
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => router.back()}
-          className="rounded-lg bg-white border border-slate-300 px-5 py-2 text-sm font-medium hover:bg-slate-50"
         >
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
+          variant="navy"
+          size="lg"
           disabled={saving}
-          className="rounded-lg bg-navy text-white px-6 py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
         >
           {saving ? "Salvando…" : initial ? "Guardar alterações" : "Criar projecto"}
-        </button>
+        </Button>
       </div>
 
       <style jsx global>{`
@@ -696,11 +699,11 @@ function MoneyInput({
 
   return (
     <div className="relative">
-      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none z-10">
         AOA
       </span>
-      <input
-        className="input text-right"
+      <Input
+        className="text-right"
         inputMode="decimal"
         placeholder="0,00"
         value={text}
@@ -713,10 +716,12 @@ function MoneyInput({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="bg-navy text-white px-5 py-3 font-semibold">{title}</div>
-      <div className="p-5">{children}</div>
-    </div>
+    <Card className="overflow-hidden rounded-2xl">
+      <CardHeader className="bg-navy px-5 py-3">
+        <CardTitle className="text-white font-semibold">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-5 pt-5">{children}</CardContent>
+    </Card>
   );
 }
 
@@ -735,7 +740,7 @@ function Field({
 }) {
   return (
     <div className={full ? "md:col-span-2" : ""}>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <Label className="mb-1 block">{label}</Label>
       {children}
     </div>
   );

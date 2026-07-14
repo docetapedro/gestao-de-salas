@@ -5,7 +5,26 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  BoxIcon,
   BriefcaseIcon,
   CalendarIcon,
   DoorIcon,
@@ -30,11 +49,21 @@ const NAV = [
   { href: "/eventos", label: "Eventos", Icon: CalendarIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
   { href: "/salas", label: "Salas", Icon: DoorIcon, roles: ["ADMIN", "MANAGER"] },
   { href: "/projetos", label: "Projectos", Icon: BriefcaseIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
+  { href: "/stock", label: "Stock", Icon: BoxIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
   { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, roles: ["ADMIN", "MANAGER"] },
   { href: "/usuarios", label: "Usuários", Icon: UsersIcon, roles: ["ADMIN"] },
 ] as const;
 
 const COLLAPSE_KEY = "salas_sidebar_collapsed";
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}
 
 export default function AppShell({
   user,
@@ -108,6 +137,10 @@ export default function AppShell({
   }
 
   const items = NAV.filter((n) => (n.roles as readonly string[]).includes(user.role));
+  const current = items.find(
+    (n) => pathname === n.href || pathname.startsWith(n.href + "/")
+  );
+  const pageTitle = current?.label ?? "Gestão de Salas";
 
   // Esconde rótulos só no desktop quando recolhido (no mobile o drawer mostra tudo).
   const hideOnCollapse = collapsed ? "lg:hidden" : "";
@@ -143,7 +176,12 @@ export default function AppShell({
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {!collapsed && (
+            <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-brand-200/70">
+              Menu
+            </p>
+          )}
           {items.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(item.href + "/");
@@ -157,8 +195,8 @@ export default function AppShell({
                   collapsed ? "lg:justify-center lg:px-0" : ""
                 } ${
                   active
-                    ? "bg-brand-500 text-white"
-                    : "text-brand-100 hover:bg-white/10"
+                    ? "bg-brand-600 text-white shadow-sm shadow-brand-900/30"
+                    : "text-brand-100 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <item.Icon className="h-5 w-5 shrink-0" />
@@ -169,32 +207,21 @@ export default function AppShell({
         </nav>
 
         <div className="p-3 border-t border-white/10">
-          <div className={`px-3 py-2 ${hideOnCollapse}`}>
-            <div className="text-sm font-semibold truncate">{user.name}</div>
-            <div className="text-[11px] text-brand-200">
-              {ROLE_LABELS[user.role]}
+          <div
+            className={`flex items-center gap-3 px-2 py-2 ${
+              collapsed ? "lg:justify-center" : ""
+            }`}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
+              {initials(user.name)}
+            </div>
+            <div className={`min-w-0 flex-1 ${hideOnCollapse}`}>
+              <div className="truncate text-sm font-semibold">{user.name}</div>
+              <div className="text-[11px] text-brand-200">
+                {ROLE_LABELS[user.role]}
+              </div>
             </div>
           </div>
-          <button
-            onClick={openPwd}
-            title="Alterar senha"
-            className={`w-full px-3 py-2 rounded-lg text-sm text-brand-100 hover:bg-white/10 transition flex items-center gap-2 ${
-              collapsed ? "lg:justify-center lg:px-0" : "text-left"
-            }`}
-          >
-            <KeyIcon className="h-5 w-5 shrink-0" />
-            <span className={hideOnCollapse}>Alterar senha</span>
-          </button>
-          <button
-            onClick={logout}
-            title="Sair"
-            className={`w-full mt-1 px-3 py-2 rounded-lg text-sm text-brand-100 hover:bg-white/10 transition flex items-center gap-2 ${
-              collapsed ? "lg:justify-center lg:px-0" : "text-left"
-            }`}
-          >
-            <LogoutIcon className="h-5 w-5 shrink-0" />
-            <span className={hideOnCollapse}>Sair</span>
-          </button>
         </div>
       </aside>
 
@@ -207,106 +234,122 @@ export default function AppShell({
 
       {/* Conteúdo */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="lg:hidden bg-navy text-white px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setOpen(true)} aria-label="Abrir menu">
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="Abrir menu"
+            className="lg:hidden text-slate-600 hover:text-navy"
+          >
             <MenuIcon className="h-6 w-6" />
           </button>
-          <span className="font-semibold">Gestão de Salas</span>
+          <h1 className="text-lg font-bold text-navy">{pageTitle}</h1>
+
+          <div className="ml-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition hover:bg-slate-100">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-white">
+                    {initials(user.name)}
+                  </span>
+                  <span className="hidden text-sm font-medium text-slate-700 sm:block">
+                    {user.name}
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>
+                  <div className="text-sm font-semibold text-slate-800">
+                    {user.name}
+                  </div>
+                  <div className="text-xs font-normal text-slate-400">
+                    {user.email}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={openPwd}>
+                  <KeyIcon className="h-4 w-4" /> Alterar senha
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <LogoutIcon className="h-4 w-4" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
         <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">{children}</main>
       </div>
 
       {/* Modal: alterar a própria senha */}
-      {showPwd && (
-        <div
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowPwd(false)}
-        >
-          <form
-            onSubmit={changePassword}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-xl max-w-sm w-full"
-          >
-            <div className="bg-navy text-white px-5 py-4 font-bold rounded-t-2xl">
-              Alterar senha
+      <Dialog open={showPwd} onOpenChange={setShowPwd}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alterar senha</DialogTitle>
+          </DialogHeader>
+          {pwdOk ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              Senha alterada com sucesso.
             </div>
-            <div className="p-5 space-y-3">
-              {pwdOk ? (
-                <div className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 border border-green-200">
-                  Senha alterada com sucesso.
+          ) : (
+            <form onSubmit={changePassword} className="space-y-3">
+              {pwdError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {pwdError}
                 </div>
-              ) : (
-                <>
-                  {pwdError && (
-                    <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
-                      {pwdError}
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Senha atual
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={pwd.current}
-                      onChange={(e) =>
-                        setPwd({ ...pwd, current: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Nova senha
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={pwd.next}
-                      onChange={(e) => setPwd({ ...pwd, next: e.target.value })}
-                      placeholder="mín. 6 caracteres"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Confirmar nova senha
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={pwd.confirm}
-                      onChange={(e) =>
-                        setPwd({ ...pwd, confirm: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                    />
-                  </div>
-                </>
               )}
-            </div>
-            <div className="px-5 pb-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPwd(false)}
-                className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200 py-2 text-sm font-medium text-slate-700"
-              >
-                {pwdOk ? "Fechar" : "Cancelar"}
-              </button>
-              {!pwdOk && (
-                <button
-                  type="submit"
-                  disabled={pwdSaving}
-                  className="flex-1 rounded-lg bg-navy text-white py-2 text-sm font-semibold hover:bg-navy-light disabled:opacity-60"
+              <div>
+                <Label className="mb-1 block">Senha atual</Label>
+                <Input
+                  type="password"
+                  required
+                  value={pwd.current}
+                  onChange={(e) => setPwd({ ...pwd, current: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block">Nova senha</Label>
+                <Input
+                  type="password"
+                  required
+                  value={pwd.next}
+                  onChange={(e) => setPwd({ ...pwd, next: e.target.value })}
+                  placeholder="mín. 6 caracteres"
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block">Confirmar nova senha</Label>
+                <Input
+                  type="password"
+                  required
+                  value={pwd.confirm}
+                  onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })}
+                />
+              </div>
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowPwd(false)}
                 >
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="navy" disabled={pwdSaving}>
                   {pwdSaving ? "Salvando…" : "Salvar"}
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+          {pwdOk && (
+            <DialogFooter>
+              <Button variant="navy" onClick={() => setShowPwd(false)}>
+                Fechar
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
