@@ -85,7 +85,7 @@ export default function DatePicker({
         <div className="absolute z-30 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
           <div className="mb-2 flex gap-1">
             <select
-              className="input flex-1 text-sm"
+              className="input min-w-0 flex-1 text-sm"
               value={viewM}
               onChange={(e) => setViewM(+e.target.value)}
             >

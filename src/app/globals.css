@@ -38,6 +38,21 @@ body {
   @apply bg-slate-100 text-slate-900 antialiased;
 }
 
+/* Campo base usado pelo DatePicker (dropdowns de mês/ano) e formulários legados. */
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  background: #fff;
+  font-size: 0.875rem;
+}
+.input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
 /* Próximo evento a acontecer: anel pulsante (efeito piscando) */
 @keyframes nextPulse {
   0% {

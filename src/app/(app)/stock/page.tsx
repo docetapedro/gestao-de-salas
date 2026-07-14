@@ -4,17 +4,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowDownCircle,
+  ArrowDownUp,
   ArrowUpCircle,
   Boxes,
+  ChevronLeft,
+  ChevronRight,
   Package,
   Plus,
   Trash2,
   TriangleAlert,
   Truck,
+  X,
 } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import DatePicker from "@/components/DatePicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -167,7 +172,10 @@ export default function StockPage() {
       <Tabs defaultValue="movimentos">
         <TabsList>
           <TabsTrigger value="movimentos">
-            <Boxes className="mr-1" /> Movimentos
+            <ArrowDownUp className="mr-1" /> Movimentos
+          </TabsTrigger>
+          <TabsTrigger value="stock">
+            <Boxes className="mr-1" /> Stock
           </TabsTrigger>
           <TabsTrigger value="produtos">
             <Package className="mr-1" /> Produtos
@@ -186,6 +194,9 @@ export default function StockPage() {
             clientes={clientes}
             reload={loadAll}
           />
+        </TabsContent>
+        <TabsContent value="stock">
+          <StockTab loading={loading} produtos={produtos} />
         </TabsContent>
         <TabsContent value="produtos">
           <ProdutosTab loading={loading} produtos={produtos} reload={loadAll} />
@@ -278,6 +289,70 @@ function EmptyRow({ cols, text }: { cols: number; text: string }) {
   );
 }
 
+/* ========================= Tab: Stock (saldos) =========================== */
+function StockTab({
+  loading,
+  produtos,
+}: {
+  loading: boolean;
+  produtos: Produto[];
+}) {
+  const ordenados = useMemo(
+    () => [...produtos].sort((a, b) => a.nome.localeCompare(b.nome)),
+    [produtos]
+  );
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Produto</TableHead>
+              <TableHead className="text-right">Stock atual</TableHead>
+              <TableHead className="text-right">Mínimo</TableHead>
+              <TableHead>Estado</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <EmptyRow cols={4} text="A carregar…" />
+            ) : ordenados.length === 0 ? (
+              <EmptyRow cols={4} text="Sem produtos." />
+            ) : (
+              ordenados.map((p) => {
+                const baixo = p.stockMinimo != null && p.saldo <= p.stockMinimo;
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium text-slate-800">
+                      {p.nome}
+                      <span className="ml-2 text-xs text-slate-400">
+                        {p.unidade}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right text-lg font-bold text-navy">
+                      {nf.format(p.saldo)}
+                    </TableCell>
+                    <TableCell className="text-right text-slate-500">
+                      {p.stockMinimo != null ? nf.format(p.stockMinimo) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {baixo ? (
+                        <Badge variant="destructive">Stock baixo</Badge>
+                      ) : (
+                        <Badge variant="success">OK</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ============================ Tab: Movimentos ============================= */
 function MovimentosTab({
   loading,
@@ -297,47 +372,129 @@ function MovimentosTab({
   const [open, setOpen] = useState(false);
   const [filtroProduto, setFiltroProduto] = useState<string>("todos");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
+  const [filtroEntidade, setFiltroEntidade] = useState<string>("todos");
+  const [pagina, setPagina] = useState(1);
   const [del, setDel] = useState<Movimento | null>(null);
   const [busyDel, setBusyDel] = useState(false);
 
+  type ItemLinha = { produtoId: string; quantidade: string };
   const empty = {
     tipo: "ENTRADA" as "ENTRADA" | "SAIDA",
-    produtoId: "",
-    quantidade: "",
     data: hoje(),
     fornecedorId: "",
     clienteId: "",
     observacao: "",
+    itens: [{ produtoId: "", quantidade: "" }] as ItemLinha[],
   };
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+
+  // Entidades (fornecedores + clientes) para o filtro.
+  const entidades = useMemo(
+    () => [
+      ...fornecedores.map((f) => ({ id: f.id, nome: f.nome, tipo: "Fornecedor" })),
+      ...clientes.map((c) => ({ id: c.id, nome: c.nome, tipo: "Cliente" })),
+    ],
+    [fornecedores, clientes]
+  );
 
   const filtrados = useMemo(
     () =>
       movimentos.filter(
         (m) =>
           (filtroProduto === "todos" || m.produto.id === filtroProduto) &&
-          (filtroTipo === "todos" || m.tipo === filtroTipo)
+          (filtroTipo === "todos" || m.tipo === filtroTipo) &&
+          (filtroEntidade === "todos" ||
+            m.fornecedor?.id === filtroEntidade ||
+            m.cliente?.id === filtroEntidade)
       ),
-    [movimentos, filtroProduto, filtroTipo]
+    [movimentos, filtroProduto, filtroTipo, filtroEntidade]
   );
 
+  // Ordenação por coluna (data, movimento/tipo, quantidade).
+  const [sort, setSort] = useState<{
+    col: "data" | "tipo" | "quantidade";
+    dir: "asc" | "desc";
+  }>({ col: "data", dir: "desc" });
+  function toggleSort(col: "data" | "tipo" | "quantidade") {
+    setSort((s) =>
+      s.col === col
+        ? { col, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { col, dir: "asc" }
+    );
+  }
+  const sortArrow = (col: "data" | "tipo" | "quantidade") =>
+    sort.col === col ? (
+      <span className="text-[10px]">{sort.dir === "asc" ? "▲" : "▼"}</span>
+    ) : null;
+  const ordenados = useMemo(() => {
+    const arr = [...filtrados];
+    arr.sort((a, b) => {
+      let d = 0;
+      if (sort.col === "data")
+        d = new Date(a.data).getTime() - new Date(b.data).getTime();
+      else if (sort.col === "tipo") d = a.tipo.localeCompare(b.tipo);
+      else d = a.quantidade - b.quantidade;
+      return sort.dir === "asc" ? d : -d;
+    });
+    return arr;
+  }, [filtrados, sort]);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [filtroProduto, filtroTipo, filtroEntidade, sort]);
+
+  const PAGE = 10;
+  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / PAGE));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const inicio = (paginaAtual - 1) * PAGE;
+  const visiveis = ordenados.slice(inicio, inicio + PAGE);
+
+  function addItem() {
+    setForm((f) => ({ ...f, itens: [...f.itens, { produtoId: "", quantidade: "" }] }));
+  }
+  function rmItem(i: number) {
+    setForm((f) => ({ ...f, itens: f.itens.filter((_, idx) => idx !== i) }));
+  }
+  function updItem(i: number, patch: Partial<ItemLinha>) {
+    setForm((f) => ({
+      ...f,
+      itens: f.itens.map((it, idx) => (idx === i ? { ...it, ...patch } : it)),
+    }));
+  }
+
   function openNovo() {
-    setForm({ ...empty, data: hoje() });
+    setForm({ ...empty, data: hoje(), itens: [{ produtoId: "", quantidade: "" }] });
     setOpen(true);
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.produtoId) return toast.error("Escolhe um produto");
+    const itens = form.itens.filter(
+      (it) => it.produtoId && Number(it.quantidade) > 0
+    );
+    if (itens.length === 0)
+      return toast.error("Adiciona pelo menos um produto com quantidade");
     setSaving(true);
     try {
       await api("/api/stock/movimentos", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          tipo: form.tipo,
+          data: form.data,
+          fornecedorId: form.fornecedorId,
+          clienteId: form.clienteId,
+          observacao: form.observacao,
+          itens: itens.map((it) => ({
+            produtoId: it.produtoId,
+            quantidade: Number(it.quantidade),
+          })),
+        }),
       });
       toast.success(
-        form.tipo === "ENTRADA" ? "Entrada registada" : "Saída registada"
+        form.tipo === "ENTRADA"
+          ? "Entrada(s) registada(s)"
+          : "Saída(s) registada(s)"
       );
       setOpen(false);
       await reload();
@@ -390,6 +547,19 @@ function MovimentosTab({
               <SelectItem value="SAIDA">Só saídas</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={filtroEntidade} onValueChange={setFiltroEntidade}>
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="Fornecedor / Cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos (forn./cliente)</SelectItem>
+              {entidades.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.nome} · {e.tipo}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button className="ml-auto" onClick={openNovo}>
             <Plus /> Novo movimento
           </Button>
@@ -398,11 +568,35 @@ function MovimentosTab({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Data</TableHead>
+              <TableHead>
+                <button
+                  type="button"
+                  onClick={() => toggleSort("data")}
+                  className="inline-flex items-center gap-1 hover:text-navy"
+                >
+                  Data {sortArrow("data")}
+                </button>
+              </TableHead>
               <TableHead>Produto</TableHead>
-              <TableHead>Movimento</TableHead>
+              <TableHead>
+                <button
+                  type="button"
+                  onClick={() => toggleSort("tipo")}
+                  className="inline-flex items-center gap-1 hover:text-navy"
+                >
+                  Movimento {sortArrow("tipo")}
+                </button>
+              </TableHead>
               <TableHead>Fornecedor / Cliente</TableHead>
-              <TableHead className="text-right">Qtd</TableHead>
+              <TableHead className="text-right">
+                <button
+                  type="button"
+                  onClick={() => toggleSort("quantidade")}
+                  className="ml-auto inline-flex items-center gap-1 hover:text-navy"
+                >
+                  Qtd {sortArrow("quantidade")}
+                </button>
+              </TableHead>
               <TableHead className="text-right">Remanescente</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -410,10 +604,10 @@ function MovimentosTab({
           <TableBody>
             {loading ? (
               <EmptyRow cols={7} text="A carregar…" />
-            ) : filtrados.length === 0 ? (
+            ) : ordenados.length === 0 ? (
               <EmptyRow cols={7} text="Sem movimentos." />
             ) : (
-              filtrados.map((m) => (
+              visiveis.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {fmtData(m.data)}
@@ -456,11 +650,44 @@ function MovimentosTab({
             )}
           </TableBody>
         </Table>
+
+        {/* Paginação */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span>
+            {ordenados.length === 0
+              ? "0 movimentos"
+              : `Mostrando ${inicio + 1}–${Math.min(
+                  inicio + PAGE,
+                  ordenados.length
+                )} de ${ordenados.length}`}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={paginaAtual <= 1}
+              onClick={() => setPagina((n) => Math.max(1, n - 1))}
+            >
+              <ChevronLeft /> Anterior
+            </Button>
+            <span className="px-1">
+              Página {paginaAtual} de {totalPaginas}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={paginaAtual >= totalPaginas}
+              onClick={() => setPagina((n) => Math.min(totalPaginas, n + 1))}
+            >
+              Próximo <ChevronRight />
+            </Button>
+          </div>
+        </div>
       </CardContent>
 
       {/* Diálogo: novo movimento */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Novo movimento</DialogTitle>
             <DialogDescription>
@@ -497,102 +724,125 @@ function MovimentosTab({
               ))}
             </div>
 
+            {/* Data + Fornecedor/Cliente */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label className="mb-1 block">Produto</Label>
-                <Select
-                  value={form.produtoId}
-                  onValueChange={(v) => setForm({ ...form, produtoId: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escolher produto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {produtos.length === 0 && (
-                      <div className="px-2 py-3 text-center text-sm text-muted-foreground">
-                        Cria um produto primeiro.
-                      </div>
-                    )}
-                    {produtos.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nome} · {nf.format(p.saldo)} {p.unidade}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="mb-1 block">Quantidade</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.quantidade}
-                  onChange={(e) =>
-                    setForm({ ...form, quantidade: e.target.value })
-                  }
-                  placeholder="0"
-                />
-              </div>
               <div>
                 <Label className="mb-1 block">Data</Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={form.data}
-                  onChange={(e) => setForm({ ...form, data: e.target.value })}
+                  onChange={(v) => setForm({ ...form, data: v })}
                 />
               </div>
-
-              {form.tipo === "ENTRADA" ? (
-                <div className="col-span-2">
-                  <Label className="mb-1 block">Fornecedor</Label>
-                  <Select
-                    value={form.fornecedorId}
-                    onValueChange={(v) => setForm({ ...form, fornecedorId: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Escolher fornecedor (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fornecedores.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>
-                          {f.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="col-span-2">
-                  <Label className="mb-1 block">Cliente</Label>
-                  <Select
-                    value={form.clienteId}
-                    onValueChange={(v) => setForm({ ...form, clienteId: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Escolher cliente (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientes.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="col-span-2">
-                <Label className="mb-1 block">Observação</Label>
-                <Input
-                  value={form.observacao}
-                  onChange={(e) =>
-                    setForm({ ...form, observacao: e.target.value })
-                  }
-                  placeholder="Opcional"
-                />
+              <div>
+                {form.tipo === "ENTRADA" ? (
+                  <>
+                    <Label className="mb-1 block">Fornecedor</Label>
+                    <Select
+                      value={form.fornecedorId}
+                      onValueChange={(v) => setForm({ ...form, fornecedorId: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Opcional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fornecedores.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                ) : (
+                  <>
+                    <Label className="mb-1 block">Cliente</Label>
+                    <Select
+                      value={form.clienteId}
+                      onValueChange={(v) => setForm({ ...form, clienteId: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Opcional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientes.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
               </div>
+            </div>
+
+            {/* Produtos — várias linhas (produto + quantidade) */}
+            <div>
+              <Label className="mb-1 block">Produtos</Label>
+              <div className="space-y-2">
+                {form.itens.map((it, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Select
+                      value={it.produtoId}
+                      onValueChange={(v) => updItem(i, { produtoId: v })}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Escolher produto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {produtos.length === 0 && (
+                          <div className="px-2 py-3 text-center text-sm text-muted-foreground">
+                            Cria um produto primeiro.
+                          </div>
+                        )}
+                        {produtos.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nome} · {nf.format(p.saldo)} {p.unidade}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-24"
+                      placeholder="Qtd"
+                      value={it.quantidade}
+                      onChange={(e) => updItem(i, { quantidade: e.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-slate-400 hover:text-destructive"
+                      onClick={() => rmItem(i)}
+                      disabled={form.itens.length === 1}
+                      title="Remover"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={addItem}
+              >
+                <Plus /> Adicionar produto
+              </Button>
+            </div>
+
+            {/* Observação */}
+            <div>
+              <Label className="mb-1 block">Observação</Label>
+              <Input
+                value={form.observacao}
+                onChange={(e) => setForm({ ...form, observacao: e.target.value })}
+                placeholder="Opcional"
+              />
             </div>
           </form>
           <DialogFooter>
