@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { ROLE_LABELS, type Role } from "@/lib/permissions";
+import { type Role } from "@/lib/permissions";
 import { Modal, ConfirmDialog } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -114,7 +114,6 @@ export default function UsuariosPage() {
         name: form.name,
         email: form.email,
         username: form.username.trim() || null,
-        role: form.role,
         perfilId: form.perfilId || null,
         notify: form.notify,
         active: form.active,
@@ -183,7 +182,7 @@ export default function UsuariosPage() {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Permissão</TableHead>
+                <TableHead>Perfil</TableHead>
                 <TableHead>Avisos</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right" />
@@ -204,24 +203,13 @@ export default function UsuariosPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        u.role === "ADMIN"
-                          ? "default"
-                          : u.role === "MANAGER"
-                          ? "secondary"
-                          : "outline"
-                      }
-                      className={
-                        u.role === "ADMIN"
-                          ? "bg-navy text-white"
-                          : u.role === "MANAGER"
-                          ? "bg-brand-100 text-brand-700"
-                          : "bg-slate-100 text-slate-600 border-transparent"
-                      }
-                    >
-                      {ROLE_LABELS[u.role]}
-                    </Badge>
+                    {u.role === "ADMIN" && !u.perfil ? (
+                      <Badge className="bg-navy text-white">Administrador</Badge>
+                    ) : u.perfil ? (
+                      <Badge variant="secondary">{u.perfil.nome}</Badge>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-slate-600">
                     {u.role === "ADMIN" ? (u.notify ? "Sim" : "Não") : "—"}
@@ -335,57 +323,30 @@ export default function UsuariosPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="user-role">Permissão *</Label>
+              <Label htmlFor="user-perfil">Perfil de acesso</Label>
               <Select
-                value={form.role}
+                value={form.perfilId || NONE}
                 onValueChange={(v) =>
-                  setForm({ ...form, role: v as Role })
+                  setForm({ ...form, perfilId: v === NONE ? "" : v })
                 }
               >
-                <SelectTrigger id="user-role">
-                  <SelectValue />
+                <SelectTrigger id="user-perfil">
+                  <SelectValue placeholder="Sem perfil" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="VIEWER">
-                    Visualizador — só vê a grade
-                  </SelectItem>
-                  <SelectItem value="MANAGER">
-                    Gestor — gerencia salas e eventos
-                  </SelectItem>
-                  <SelectItem value="ADMIN">
-                    Administrador — tudo + usuários + avisos
-                  </SelectItem>
+                  <SelectItem value={NONE}>Sem perfil</SelectItem>
+                  {perfis.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Define o que o utilizador pode ver / gerir em cada módulo. Cria
+                perfis em <b>Perfis</b>.
+              </p>
             </div>
-            {form.role !== "ADMIN" && (
-              <div className="space-y-1">
-                <Label htmlFor="user-perfil">Perfil de acesso</Label>
-                <Select
-                  value={form.perfilId || NONE}
-                  onValueChange={(v) =>
-                    setForm({ ...form, perfilId: v === NONE ? "" : v })
-                  }
-                >
-                  <SelectTrigger id="user-perfil">
-                    <SelectValue placeholder="Sem perfil (usa a permissão base)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>
-                      Sem perfil (usa a permissão base)
-                    </SelectItem>
-                    {perfis.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Se escolheres um perfil, as permissões vêm dele (por módulo).
-                </p>
-              </div>
-            )}
             {form.role === "ADMIN" && (
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
