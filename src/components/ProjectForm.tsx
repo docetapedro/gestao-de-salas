@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { MODALIDADES, NIVEIS } from "@/lib/projetos";
+import { MODALIDADES, NIVEIS, formatNum } from "@/lib/projetos";
 import DatePicker from "@/components/DatePicker";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,16 @@ export type ProjectInitial = {
   formadores: { formadorId: string }[];
   participantes: Participante[];
   financeiro: { rubricaId: string; previsto: number; realizado: number }[];
+  // Turmas com os lançamentos (só para mostrar um resumo read-only na edição).
+  turmas?: {
+    id: string;
+    codigo: string | null;
+    financeiro: {
+      previsto: number;
+      realizado: number;
+      rubrica: { nome: string; tipo: string };
+    }[];
+  }[];
 };
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
@@ -262,12 +272,6 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
               rows={2}
               value={form.descricao}
               onChange={(e) => set("descricao", e.target.value)}
-            />
-          </Field>
-          <Field label="Código da Turma">
-            <Input
-              value={form.codigoTurma}
-              onChange={(e) => set("codigoTurma", e.target.value)}
             />
           </Field>
           <Field label="Segmento de Mercado">
@@ -511,13 +515,62 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
         </div>
       </Section>
 
-      {/* Financeiro — agora lançado por turma no detalhe do projecto */}
+      {/* Financeiro — lançado por turma no detalhe. Aqui mostra-se só leitura. */}
       <Section title="Financeiro & ROI">
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
-          Os lançamentos financeiros passaram a ser feitos <b>por turma</b>, na
-          página do projecto. Depois de guardar, abre o projecto e lança as
-          rubricas (previsto/realizado) na turma pretendida.
-        </div>
+        {initial?.turmas && initial.turmas.length > 0 ? (
+          <div className="space-y-4">
+            {initial.turmas.map((t) => (
+              <div key={t.id}>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Turma {t.codigo || "—"}
+                </div>
+                {t.financeiro.length === 0 ? (
+                  <p className="text-sm text-slate-400">Sem lançamentos.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+                          <th className="pb-1 font-medium">Rubrica</th>
+                          <th className="pb-1 text-right font-medium">Previsto (AOA)</th>
+                          <th className="pb-1 text-right font-medium">Realizado (AOA)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {t.financeiro.map((f, i) => (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="py-1.5 text-slate-700">
+                              {f.rubrica.nome}
+                              <span className="ml-2 text-xs text-slate-400">
+                                {f.rubrica.tipo === "RECEITA" ? "Receita" : "Custo"}
+                              </span>
+                            </td>
+                            <td className="py-1.5 text-right text-slate-500">
+                              {formatNum(f.previsto)}
+                            </td>
+                            <td className="py-1.5 text-right font-medium text-slate-700">
+                              {formatNum(f.realizado)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-500">
+              Só leitura. Para lançar ou editar rubricas, volta ao relatório do
+              projecto e usa <b>Lançar rubricas</b> na turma pretendida.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+            Os lançamentos financeiros são feitos <b>por turma</b>, na página do
+            projecto. Depois de guardar, abre o projecto e lança as rubricas
+            (previsto/realizado) na turma pretendida.
+          </div>
+        )}
       </Section>
 
       {/* Qualidade */}
