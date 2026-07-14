@@ -7,8 +7,10 @@ import {
   ArrowDownUp,
   ArrowUpCircle,
   Boxes,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Layers,
   Package,
   Plus,
   Trash2,
@@ -450,6 +452,27 @@ function MovimentosTab({
   const inicio = (paginaAtual - 1) * PAGE;
   const visiveis = ordenados.slice(inicio, inicio + PAGE);
 
+  // Agrupar por artigo (vista collapsible). `fechados` guarda os grupos recolhidos.
+  const [agrupar, setAgrupar] = useState(false);
+  const [fechados, setFechados] = useState<Set<string>>(new Set());
+  function toggleGrupo(pid: string) {
+    setFechados((s) => {
+      const n = new Set(s);
+      if (n.has(pid)) n.delete(pid);
+      else n.add(pid);
+      return n;
+    });
+  }
+  const grupos = useMemo(() => {
+    const map = new Map<string, Movimento[]>();
+    for (const m of ordenados) {
+      const arr = map.get(m.produto.id) ?? [];
+      arr.push(m);
+      map.set(m.produto.id, arr);
+    }
+    return [...map.entries()];
+  }, [ordenados]);
+
   function addItem() {
     setForm((f) => ({ ...f, itens: [...f.itens, { produtoId: "", quantidade: "" }] }));
   }
@@ -560,11 +583,113 @@ function MovimentosTab({
               ))}
             </SelectContent>
           </Select>
-          <Button className="ml-auto" onClick={openNovo}>
+          <Button
+            variant={agrupar ? "default" : "outline"}
+            className="ml-auto"
+            onClick={() => setAgrupar((v) => !v)}
+          >
+            <Layers /> Agrupar por artigo
+          </Button>
+          <Button onClick={openNovo}>
             <Plus /> Novo movimento
           </Button>
         </div>
 
+        {agrupar ? (
+          <div className="space-y-2">
+            {grupos.length === 0 && (
+              <div className="py-8 text-center text-muted-foreground">
+                Sem movimentos.
+              </div>
+            )}
+            {grupos.map(([pid, movs]) => {
+              const aberto = !fechados.has(pid);
+              const prod = produtos.find((p) => p.id === pid);
+              return (
+                <div
+                  key={pid}
+                  className="overflow-hidden rounded-lg border border-slate-200"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleGrupo(pid)}
+                    className="flex w-full items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 text-left hover:bg-slate-100"
+                  >
+                    <span className="flex items-center gap-2 font-medium text-slate-800">
+                      {aberto ? (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                      )}
+                      {movs[0].produto.nome}
+                      <Badge variant="secondary">{movs.length}</Badge>
+                    </span>
+                    {prod && (
+                      <span className="text-xs text-muted-foreground">
+                        Stock: <b className="text-navy">{nf.format(prod.saldo)}</b>{" "}
+                        {prod.unidade}
+                      </span>
+                    )}
+                  </button>
+                  {aberto && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Movimento</TableHead>
+                          <TableHead>Fornecedor / Cliente</TableHead>
+                          <TableHead className="text-right">Qtd</TableHead>
+                          <TableHead className="text-right">Remanescente</TableHead>
+                          <TableHead className="w-10" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {movs.map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">
+                              {fmtData(m.data)}
+                            </TableCell>
+                            <TableCell>
+                              {m.tipo === "ENTRADA" ? (
+                                <Badge variant="success" className="gap-1">
+                                  <ArrowDownCircle className="h-3.5 w-3.5" /> Entrada
+                                </Badge>
+                              ) : (
+                                <Badge variant="warning" className="gap-1">
+                                  <ArrowUpCircle className="h-3.5 w-3.5" /> Saída
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-slate-600">
+                              {m.fornecedor?.nome ?? m.cliente?.nome ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {m.tipo === "ENTRADA" ? "+" : "−"}
+                              {nf.format(m.quantidade)}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-navy">
+                              {nf.format(m.remanescente)}
+                            </TableCell>
+                            <TableCell>
+                              <button
+                                onClick={() => setDel(m)}
+                                className="text-slate-400 transition-colors hover:text-destructive"
+                                title="Excluir"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <>
         <Table>
           <TableHeader>
             <TableRow>
@@ -683,6 +808,8 @@ function MovimentosTab({
             </Button>
           </div>
         </div>
+          </>
+        )}
       </CardContent>
 
       {/* Diálogo: novo movimento */}
