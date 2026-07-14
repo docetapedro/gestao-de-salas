@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertCanManage } from "@/lib/permissions";
+import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 
 type Params = { params: Promise<{ id: string }> };
@@ -17,7 +17,7 @@ function num(v: unknown): number {
  */
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "projetos", "manage");
     const { id: turmaId } = await params;
     const body = await req.json();
     const rubricaId = String(body.rubricaId || "").trim();

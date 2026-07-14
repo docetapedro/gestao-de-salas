@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertAuthenticated, assertCanManage } from "@/lib/permissions";
+import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { calcularIndicadores } from "@/lib/projetos";
 import {
@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "projetos", "manage");
     const { id } = await params;
     const body = await req.json();
     const scalars = projectScalars(body);
@@ -59,7 +59,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "projetos", "manage");
     const { id } = await params;
     await prisma.project.delete({ where: { id } });
     return json({ ok: true });

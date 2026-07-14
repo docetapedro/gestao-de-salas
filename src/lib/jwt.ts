@@ -8,6 +8,8 @@ export type SessionPayload = {
   name: string;
   email: string;
   role: "ADMIN" | "MANAGER" | "VIEWER";
+  // Permissões do perfil (por módulo). Ausente = usar fallback do role.
+  perm?: Record<string, "view" | "manage">;
 };
 
 const secret = new TextEncoder().encode(
@@ -37,6 +39,7 @@ export async function verifySession(
       name: String(payload.name),
       email: String(payload.email),
       role: payload.role as SessionPayload["role"],
+      perm: (payload.perm as SessionPayload["perm"]) ?? undefined,
     };
   } catch {
     return null;

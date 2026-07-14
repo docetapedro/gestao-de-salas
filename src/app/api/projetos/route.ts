@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertAuthenticated, assertCanManage } from "@/lib/permissions";
+import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import {
   projectScalars,
@@ -36,7 +36,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = assertCanManage(await getSession());
+    const session = assertCan(await getSession(), "projetos", "manage");
     const body = await req.json();
     const scalars = projectScalars(body);
     if (!scalars.nome) return json({ error: "Nome do projecto é obrigatório" }, 400);

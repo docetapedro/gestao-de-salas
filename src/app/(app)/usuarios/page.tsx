@@ -26,17 +26,21 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 
+type Perfil = { id: string; nome: string };
 type User = {
   id: string;
   name: string;
   email: string;
   username: string | null;
   role: Role;
+  perfilId: string | null;
+  perfil: { id: string; nome: string } | null;
   notify: boolean;
   active: boolean;
   createdAt: string;
 };
 
+const NONE = "__none__";
 const emptyForm = {
   id: "",
   name: "",
@@ -44,12 +48,14 @@ const emptyForm = {
   username: "",
   password: "",
   role: "VIEWER" as Role,
+  perfilId: "",
   notify: true,
   active: true,
 };
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -60,8 +66,12 @@ export default function UsuariosPage() {
 
   async function load() {
     try {
-      const { users } = await api<{ users: User[] }>("/api/users");
+      const [{ users }, perfilRes] = await Promise.all([
+        api<{ users: User[] }>("/api/users"),
+        api<{ perfis: Perfil[] }>("/api/perfis").catch(() => ({ perfis: [] })),
+      ]);
       setUsers(users);
+      setPerfis(perfilRes.perfis);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -87,6 +97,7 @@ export default function UsuariosPage() {
       username: u.username ?? "",
       password: "",
       role: u.role,
+      perfilId: u.perfilId ?? "",
       notify: u.notify,
       active: u.active,
     });
@@ -104,6 +115,7 @@ export default function UsuariosPage() {
         email: form.email,
         username: form.username.trim() || null,
         role: form.role,
+        perfilId: form.perfilId || null,
         notify: form.notify,
         active: form.active,
       };
@@ -346,6 +358,34 @@ export default function UsuariosPage() {
                 </SelectContent>
               </Select>
             </div>
+            {form.role !== "ADMIN" && (
+              <div className="space-y-1">
+                <Label htmlFor="user-perfil">Perfil de acesso</Label>
+                <Select
+                  value={form.perfilId || NONE}
+                  onValueChange={(v) =>
+                    setForm({ ...form, perfilId: v === NONE ? "" : v })
+                  }
+                >
+                  <SelectTrigger id="user-perfil">
+                    <SelectValue placeholder="Sem perfil (usa a permissão base)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>
+                      Sem perfil (usa a permissão base)
+                    </SelectItem>
+                    {perfis.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Se escolheres um perfil, as permissões vêm dele (por módulo).
+                </p>
+              </div>
+            )}
             {form.role === "ADMIN" && (
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input

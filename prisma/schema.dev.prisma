@@ -22,12 +22,31 @@ model User {
   username  String?  @unique
   password  String
   role      String   @default("VIEWER")
+  // Perfil de permissões (opcional). ADMIN (role) continua super-admin.
+  perfilId  String?
+  perfil    Perfil?  @relation(fields: [perfilId], references: [id], onDelete: SetNull)
   notify    Boolean  @default(true)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   events Event[] @relation("EventCreator")
+
+  @@index([perfilId])
+}
+
+// Perfil de acesso: conjunto de permissões por módulo.
+// `permissoes` é um JSON (texto) { modulo: "view" | "manage" }; ausência = sem acesso.
+model Perfil {
+  id         String   @id @default(cuid())
+  nome       String   @unique
+  descricao  String?
+  permissoes String   @default("{}")
+  sistema    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users User[]
 }
 
 model Room {

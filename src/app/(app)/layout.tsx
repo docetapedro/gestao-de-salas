@@ -16,6 +16,7 @@ export default async function AppLayout({
     name: session.name,
     email: session.email,
     role: session.role,
+    perm: session.perm,
   };
 
   return (

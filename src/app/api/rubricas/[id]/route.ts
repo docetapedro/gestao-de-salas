@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertCanManage } from "@/lib/permissions";
+import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "cadastros", "manage");
     const { id } = await params;
     const body = await req.json();
     const rubrica = await prisma.rubricaTipo.update({
@@ -32,7 +32,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "cadastros", "manage");
     const { id } = await params;
     await prisma.rubricaTipo.delete({ where: { id } });
     return json({ ok: true });

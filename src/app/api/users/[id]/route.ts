@@ -32,6 +32,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
     if (body.role !== undefined && ROLES.includes(body.role))
       data.role = body.role;
+    if (body.perfilId !== undefined)
+      data.perfilId = body.perfilId ? String(body.perfilId) : null;
     if (body.notify !== undefined) data.notify = Boolean(body.notify);
     if (body.active !== undefined) data.active = Boolean(body.active);
     if (body.password) {
@@ -57,6 +59,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
         email: true,
         username: true,
         role: true,
+        perfilId: true,
+        perfil: { select: { id: true, nome: true } },
         notify: true,
         active: true,
         createdAt: true,

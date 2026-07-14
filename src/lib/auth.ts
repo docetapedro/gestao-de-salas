@@ -62,14 +62,27 @@ export async function authenticate(
   const id = identifier.toLowerCase().trim();
   const user = await prisma.user.findFirst({
     where: { OR: [{ email: id }, { username: id }] },
+    include: { perfil: true },
   });
   if (!user || !user.active) return null;
   const ok = await verifyPassword(password, user.password);
   if (!ok) return null;
+
+  // Permissões do perfil (JSON em texto) → incluídas na sessão.
+  let perm: SessionPayload["perm"];
+  if (user.perfil) {
+    try {
+      perm = JSON.parse(user.perfil.permissoes || "{}");
+    } catch {
+      perm = {};
+    }
+  }
+
   return {
     sub: user.id,
     name: user.name,
     email: user.email,
     role: user.role as SessionPayload["role"],
+    perm,
   };
 }

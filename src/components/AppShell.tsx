@@ -4,7 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { ROLE_LABELS, type Role } from "@/lib/permissions";
+import {
+  ROLE_LABELS,
+  can,
+  type Role,
+  type ModuloKey,
+  type Permissoes,
+} from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,17 +48,24 @@ type User = {
   name: string;
   email: string;
   role: Role;
+  perm?: Permissoes;
 };
 
-const NAV = [
-  { href: "/dashboard", label: "Agenda", Icon: GridIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
-  { href: "/eventos", label: "Eventos", Icon: CalendarIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
-  { href: "/salas", label: "Salas", Icon: DoorIcon, roles: ["ADMIN", "MANAGER"] },
-  { href: "/projetos", label: "Projectos", Icon: BriefcaseIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
-  { href: "/stock", label: "Stock", Icon: BoxIcon, roles: ["ADMIN", "MANAGER", "VIEWER"] },
-  { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, roles: ["ADMIN", "MANAGER"] },
-  { href: "/usuarios", label: "Usuários", Icon: UsersIcon, roles: ["ADMIN"] },
-] as const;
+const NAV: {
+  href: string;
+  label: string;
+  Icon: (p: { className?: string }) => React.ReactElement;
+  modulo: ModuloKey;
+}[] = [
+  { href: "/dashboard", label: "Agenda", Icon: GridIcon, modulo: "agenda" },
+  { href: "/eventos", label: "Eventos", Icon: CalendarIcon, modulo: "eventos" },
+  { href: "/salas", label: "Salas", Icon: DoorIcon, modulo: "salas" },
+  { href: "/projetos", label: "Projectos", Icon: BriefcaseIcon, modulo: "projetos" },
+  { href: "/stock", label: "Stock", Icon: BoxIcon, modulo: "stock" },
+  { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, modulo: "cadastros" },
+  { href: "/usuarios", label: "Usuários", Icon: UsersIcon, modulo: "usuarios" },
+  { href: "/perfis", label: "Perfis", Icon: KeyIcon, modulo: "usuarios" },
+];
 
 const COLLAPSE_KEY = "salas_sidebar_collapsed";
 
@@ -136,7 +149,7 @@ export default function AppShell({
     router.refresh();
   }
 
-  const items = NAV.filter((n) => (n.roles as readonly string[]).includes(user.role));
+  const items = NAV.filter((n) => can(user, n.modulo, "view"));
   const current = items.find(
     (n) => pathname === n.href || pathname.startsWith(n.href + "/")
   );

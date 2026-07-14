@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertCanManage } from "@/lib/permissions";
+import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { findConflict } from "@/lib/events";
 
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "eventos", "manage");
     const { id } = await params;
     const body = await req.json();
 
@@ -63,7 +63,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "eventos", "manage");
     const { id } = await params;
     const series = new URL(req.url).searchParams.get("series");
 

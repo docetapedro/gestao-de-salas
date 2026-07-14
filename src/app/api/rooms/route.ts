@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertAuthenticated, assertCanManage } from "@/lib/permissions";
+import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 
 export async function GET() {
@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "salas", "manage");
     const body = await req.json();
     const name = String(body.name || "").trim();
     if (!name) return json({ error: "Nome da sala é obrigatório" }, 400);

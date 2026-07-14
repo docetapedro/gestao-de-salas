@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertCanManage } from "@/lib/permissions";
+import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,7 +19,7 @@ function str(v: unknown): string | null {
 
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "projetos", "manage");
     const { id } = await params;
     const body = await req.json();
     const turma = await prisma.turma.update({
@@ -40,7 +40,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
-    assertCanManage(await getSession());
+    assertCan(await getSession(), "projetos", "manage");
     const { id } = await params;
     // Cascade: apaga os lançamentos financeiros da turma.
     await prisma.turma.delete({ where: { id } });

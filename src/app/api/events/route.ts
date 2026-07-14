@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { assertAuthenticated, assertCanManage } from "@/lib/permissions";
+import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { findConflict } from "@/lib/events";
 import { randomUUID } from "crypto";
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = assertCanManage(await getSession());
+    const session = assertCan(await getSession(), "eventos", "manage");
     const body = await req.json();
 
     const title = String(body.title || "").trim();
