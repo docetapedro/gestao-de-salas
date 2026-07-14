@@ -11,11 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ClipboardList, Users, Coins, Award } from "lucide-react";
 
 // Classe partilhada para os <select> nativos (mantidos por causa da opção "—"
 // com value="" e da sincronização de estado existente). Visual alinhado ao Input.
 const selectClass =
-  "flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-8 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 type Lookup = { id: string; nome: string };
 type Rubrica = { id: string; nome: string; tipo: string; ordem: number };
@@ -30,6 +32,7 @@ type Participante = {
 
 export type ProjectInitial = {
   id: string;
+  codigo?: string | null;
   nome: string;
   descricao: string | null;
   segmentoMercado: string | null;
@@ -250,16 +253,55 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6 max-w-5xl">
+    <form
+      onSubmit={submit}
+      className="space-y-6 max-w-5xl [&_input]:h-8 [&_select]:h-8"
+    >
       {error && (
         <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2 border border-red-200">
           {error}
         </div>
       )}
 
+      {/* Botões no topo — sempre visíveis, em qualquer separador */}
+      <div className="flex items-center justify-end gap-2 border-b border-slate-200 pb-3">
+        <Button type="button" variant="outline" onClick={() => router.back()}>
+          Cancelar
+        </Button>
+        <Button type="submit" variant="navy" disabled={saving}>
+          {saving ? "Salvando…" : initial ? "Guardar alterações" : "Criar projecto"}
+        </Button>
+      </div>
+
+      <Tabs defaultValue="ident" className="w-full">
+        <TabsList className="mb-4 flex h-auto flex-wrap justify-start gap-1 bg-slate-100">
+          <TabsTrigger value="ident">
+            <ClipboardList /> Identificação &amp; Público
+          </TabsTrigger>
+          <TabsTrigger value="participantes">
+            <Users /> Participantes
+          </TabsTrigger>
+          <TabsTrigger value="financeiro">
+            <Coins /> Financeiro &amp; ROI
+          </TabsTrigger>
+          <TabsTrigger value="qualidade">
+            <Award /> Qualidade
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ident">
       {/* Identificação */}
       <Section title="Identificação & Público">
         <Grid>
+          {initial?.codigo && (
+            <Field label="Código do Projecto" full>
+              <Input
+                readOnly
+                value={initial.codigo}
+                className="bg-slate-50 font-mono text-slate-600"
+              />
+            </Field>
+          )}
           <Field label="Nome do Projecto *" full>
             <Input
               required
@@ -433,7 +475,9 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Field>
         </Grid>
       </Section>
+        </TabsContent>
 
+        <TabsContent value="participantes">
       {/* Participantes */}
       <Section title="Participantes / Inscritos">
         <div className="space-y-2">
@@ -514,7 +558,9 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Button>
         </div>
       </Section>
+        </TabsContent>
 
+        <TabsContent value="financeiro">
       {/* Financeiro — lançado por turma no detalhe. Aqui mostra-se só leitura. */}
       <Section title="Financeiro & ROI">
         {initial?.turmas && initial.turmas.length > 0 ? (
@@ -572,7 +618,9 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </div>
         )}
       </Section>
+        </TabsContent>
 
+        <TabsContent value="qualidade">
       {/* Qualidade */}
       <Section title="Qualidade & Avaliação">
         <Grid>
@@ -641,24 +689,8 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
           </Field>
         </Grid>
       </Section>
-
-      <div className="flex gap-2 sticky bottom-0 bg-slate-100 py-3">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.back()}
-        >
-          Cancelar
-        </Button>
-        <Button
-          type="submit"
-          variant="navy"
-          size="lg"
-          disabled={saving}
-        >
-          {saving ? "Salvando…" : initial ? "Guardar alterações" : "Criar projecto"}
-        </Button>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <style jsx global>{`
         .input {
