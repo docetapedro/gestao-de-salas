@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate --schema prisma/schema.prisma && prisma db push --schema prisma/schema.prisma --skip-generate && tsx prisma/backfill-codigo.ts && next build",
+    "build": "prisma generate --schema prisma/schema.prisma && prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss && tsx prisma/backfill-codigo.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate --schema prisma/schema.prisma",
