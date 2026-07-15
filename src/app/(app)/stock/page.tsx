@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Eye,
   Layers,
   Package,
   Plus,
@@ -291,6 +292,15 @@ function EmptyRow({ cols, text }: { cols: number; text: string }) {
   );
 }
 
+function DetLinha({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5">
+      <span className="text-muted-foreground">{k}</span>
+      <span className="text-right font-medium text-slate-800">{v}</span>
+    </div>
+  );
+}
+
 /* ========================= Tab: Stock (saldos) =========================== */
 function StockTab({
   loading,
@@ -378,6 +388,7 @@ function MovimentosTab({
   const [pagina, setPagina] = useState(1);
   const [del, setDel] = useState<Movimento | null>(null);
   const [busyDel, setBusyDel] = useState(false);
+  const [detalhe, setDetalhe] = useState<Movimento | null>(null);
 
   type ItemLinha = { produtoId: string; quantidade: string };
   const empty = {
@@ -498,6 +509,14 @@ function MovimentosTab({
     );
     if (itens.length === 0)
       return toast.error("Adiciona pelo menos um produto com quantidade");
+    const temEntidade =
+      form.tipo === "ENTRADA" ? !!form.fornecedorId : !!form.clienteId;
+    if (!temEntidade && !form.observacao.trim())
+      return toast.error(
+        `Sem ${
+          form.tipo === "ENTRADA" ? "fornecedor" : "cliente"
+        }, a observação é obrigatória.`
+      );
     setSaving(true);
     try {
       await api("/api/stock/movimentos", {
@@ -671,13 +690,22 @@ function MovimentosTab({
                               {nf.format(m.remanescente)}
                             </TableCell>
                             <TableCell>
-                              <button
-                                onClick={() => setDel(m)}
-                                className="text-slate-400 transition-colors hover:text-destructive"
-                                title="Excluir"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setDetalhe(m)}
+                                  className="text-slate-400 transition-colors hover:text-brand-600"
+                                  title="Ver detalhes"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => setDel(m)}
+                                  className="text-slate-400 transition-colors hover:text-destructive"
+                                  title="Excluir"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -762,13 +790,22 @@ function MovimentosTab({
                     {nf.format(m.remanescente)}
                   </TableCell>
                   <TableCell>
-                    <button
-                      onClick={() => setDel(m)}
-                      className="text-slate-400 transition-colors hover:text-destructive"
-                      title="Excluir"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setDetalhe(m)}
+                        className="text-slate-400 transition-colors hover:text-brand-600"
+                        title="Ver detalhes"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDel(m)}
+                        className="text-slate-400 transition-colors hover:text-destructive"
+                        title="Excluir"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -962,13 +999,24 @@ function MovimentosTab({
               </Button>
             </div>
 
-            {/* Observação */}
+            {/* Observação (obrigatória se não houver fornecedor/cliente) */}
             <div>
-              <Label className="mb-1 block">Observação</Label>
+              <Label className="mb-1 block">
+                Observação
+                {(form.tipo === "ENTRADA"
+                  ? !form.fornecedorId
+                  : !form.clienteId) && (
+                  <span className="text-destructive"> *</span>
+                )}
+              </Label>
               <Input
                 value={form.observacao}
                 onChange={(e) => setForm({ ...form, observacao: e.target.value })}
-                placeholder="Opcional"
+                placeholder={
+                  (form.tipo === "ENTRADA" ? !form.fornecedorId : !form.clienteId)
+                    ? "Obrigatória (sem fornecedor/cliente)"
+                    : "Opcional"
+                }
               />
             </div>
           </form>
@@ -993,6 +1041,57 @@ function MovimentosTab({
         Excluir este movimento de <b>{del?.produto.nome}</b>? O remanescente será
         recalculado.
       </ConfirmDelete>
+
+      {/* Modal: detalhes do movimento */}
+      <Dialog open={!!detalhe} onOpenChange={(v) => !v && setDetalhe(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalhes do movimento</DialogTitle>
+          </DialogHeader>
+          {detalhe && (
+            <div className="space-y-2 text-sm">
+              <DetLinha k="Produto" v={detalhe.produto.nome} />
+              <DetLinha
+                k="Movimento"
+                v={
+                  detalhe.tipo === "ENTRADA" ? (
+                    <Badge variant="success" className="gap-1">
+                      <ArrowDownCircle className="h-3.5 w-3.5" /> Entrada
+                    </Badge>
+                  ) : (
+                    <Badge variant="warning" className="gap-1">
+                      <ArrowUpCircle className="h-3.5 w-3.5" /> Saída
+                    </Badge>
+                  )
+                }
+              />
+              <DetLinha k="Data" v={fmtData(detalhe.data)} />
+              <DetLinha
+                k="Quantidade"
+                v={`${detalhe.tipo === "ENTRADA" ? "+" : "−"}${nf.format(
+                  detalhe.quantidade
+                )} ${detalhe.produto.unidade}`}
+              />
+              <DetLinha
+                k="Remanescente"
+                v={`${nf.format(detalhe.remanescente)} ${detalhe.produto.unidade}`}
+              />
+              <DetLinha
+                k={detalhe.tipo === "ENTRADA" ? "Fornecedor" : "Cliente"}
+                v={detalhe.fornecedor?.nome ?? detalhe.cliente?.nome ?? "—"}
+              />
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Observação
+                </div>
+                <p className="mt-0.5 whitespace-pre-wrap text-slate-700">
+                  {detalhe.observacao || "—"}
+                </p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

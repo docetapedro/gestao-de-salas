@@ -170,14 +170,7 @@ export default function RelatorioPage({
         <div className="mb-5 flex items-center justify-between gap-4 rounded-xl bg-gradient-to-r from-navy via-navy to-navy-light px-5 py-4 text-white print:[-webkit-print-color-adjust:exact] print:[print-color-adjust:exact]">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/Logo1.png"
-              alt="Logo"
-              className="h-10 object-contain"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = "/Logo.png";
-              }}
-            />
+            <img src="/Logo.png" alt="Logo" className="h-10 object-contain" />
             <div className="border-l border-white/20 pl-3">
               <h1 className="text-xl font-bold leading-tight tracking-tight">
                 RELATÓRIO DE FORMAÇÃO

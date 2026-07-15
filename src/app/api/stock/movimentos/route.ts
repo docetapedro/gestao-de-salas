@@ -106,6 +106,19 @@ export async function POST(req: NextRequest) {
       tipo === "SAIDA" && body.clienteId ? String(body.clienteId) : null;
     const observacao = body.observacao ? String(body.observacao).trim() : null;
 
+    // Sem fornecedor (entrada) ou cliente (saída), a observação é obrigatória.
+    const temEntidade = tipo === "ENTRADA" ? !!fornecedorId : !!clienteId;
+    if (!temEntidade && !observacao) {
+      return json(
+        {
+          error: `Sem ${
+            tipo === "ENTRADA" ? "fornecedor" : "cliente"
+          }, a observação é obrigatória.`,
+        },
+        400
+      );
+    }
+
     // Cria todos os movimentos numa transação (um registo por item).
     await prisma.$transaction(
       itens.map((it) =>

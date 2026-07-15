@@ -50,12 +50,9 @@ function LoginForm() {
         <div className="mb-6 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/Logo1.png"
+            src="/Logo.png"
             alt="Gestão de Salas"
             className="mx-auto h-20 w-auto"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = "/Logo.png";
-            }}
           />
         </div>
 
