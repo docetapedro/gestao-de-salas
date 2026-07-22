@@ -325,3 +325,88 @@ model MovimentoStock {
   @@index([produtoId, data])
   @@index([tipo])
 }
+
+// ===========================================================================
+// Módulo: Gamificação (Team Building)
+// Um evento de team building agrupa equipas que competem em dinâmicas.
+// A pontuação é lançada por equipa em cada dinâmica; o ranking geral do
+// evento é a soma dos pontos (multiplicados pelo peso da dinâmica).
+// ===========================================================================
+
+// Evento / sessão de team building (ex.: "Kick-off 2026").
+model TeamBuildingEvento {
+  id          String   @id @default(cuid())
+  nome        String
+  descricao   String?
+  local       String?
+  data        DateTime?
+  ativo       Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  equipas   Equipa[]
+  dinamicas Dinamica[]
+}
+
+// Equipa participante de um evento. A pontuação é sempre por equipa.
+model Equipa {
+  id        String             @id @default(cuid())
+  eventoId  String
+  evento    TeamBuildingEvento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  nome      String
+  cor       String             @default("#2563eb") // cor da equipa (ranking/projeção)
+  lema      String? // slogan opcional
+  ordem     Int                @default(0)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  membros        EquipaMembro[]
+  classificacoes Classificacao[]
+
+  @@index([eventoId])
+}
+
+// Membro (nome) de uma equipa — opcional.
+model EquipaMembro {
+  id       String @id @default(cuid())
+  equipaId String
+  equipa   Equipa @relation(fields: [equipaId], references: [id], onDelete: Cascade)
+  nome     String
+
+  @@index([equipaId])
+}
+
+// Dinâmica / desafio dentro de um evento (ex.: "Caça ao tesouro").
+model Dinamica {
+  id        String             @id @default(cuid())
+  eventoId  String
+  evento    TeamBuildingEvento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  nome      String
+  descricao String?
+  ordem     Int                @default(0)
+  // Multiplicador dos pontos desta dinâmica no ranking geral (default 1).
+  peso      Float              @default(1)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  classificacoes Classificacao[]
+
+  @@index([eventoId])
+}
+
+// Pontuação de uma equipa numa dinâmica (um registo por equipa/dinâmica).
+model Classificacao {
+  id         String   @id @default(cuid())
+  dinamicaId String
+  dinamica   Dinamica @relation(fields: [dinamicaId], references: [id], onDelete: Cascade)
+  equipaId   String
+  equipa     Equipa   @relation(fields: [equipaId], references: [id], onDelete: Cascade)
+  pontos     Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([dinamicaId, equipaId])
+  @@index([dinamicaId])
+  @@index([equipaId])
+}

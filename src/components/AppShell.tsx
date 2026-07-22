@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   ROLE_LABELS,
@@ -40,6 +41,7 @@ import {
   MenuIcon,
   PanelLeftIcon,
   SlidersIcon,
+  TrophyIcon,
   UsersIcon,
 } from "@/components/icons";
 
@@ -56,12 +58,25 @@ const NAV: {
   label: string;
   Icon: (p: { className?: string }) => React.ReactElement;
   modulo: ModuloKey;
+  children?: { href: string; label: string }[];
 }[] = [
   { href: "/dashboard", label: "Agenda", Icon: GridIcon, modulo: "agenda" },
   { href: "/eventos", label: "Eventos", Icon: CalendarIcon, modulo: "eventos" },
   { href: "/salas", label: "Salas", Icon: DoorIcon, modulo: "salas" },
-  { href: "/projetos", label: "Projectos", Icon: BriefcaseIcon, modulo: "projetos" },
-  { href: "/stock", label: "Stock", Icon: BoxIcon, modulo: "stock" },
+  {
+    href: "/projetos",
+    label: "Projectos",
+    Icon: BriefcaseIcon,
+    modulo: "projetos",
+    children: [{ href: "/projetos/despesas", label: "Despesas e Custos" }],
+  },
+  { href: "/stock", label: "Gestão de Stock", Icon: BoxIcon, modulo: "stock" },
+  {
+    href: "/gamificacao",
+    label: "Gamificação",
+    Icon: TrophyIcon,
+    modulo: "gamificacao",
+  },
   { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, modulo: "cadastros" },
   { href: "/usuarios", label: "Usuários", Icon: UsersIcon, modulo: "usuarios" },
   { href: "/perfis", label: "Perfis", Icon: KeyIcon, modulo: "usuarios" },
@@ -198,23 +213,65 @@ export default function AppShell({
           {items.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(item.href + "/");
+            // Sub-menu só aparece quando a secção está activa e o menu não está recolhido.
+            const children = item.children?.filter((c) =>
+              can(user, item.modulo, "view")
+            );
+            const hasChildren = !!children?.length;
+            const showChildren = hasChildren && active && !collapsed;
+            // Realça a fundo cheio quando é a própria página; quando o activo é um
+            // sub-item, mantém um realce subtil para o pai continuar a parecer clicável.
+            const onOwnPage = pathname === item.href;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                title={item.label}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                  collapsed ? "lg:justify-center lg:px-0" : ""
-                } ${
-                  active
-                    ? "bg-brand-600 text-white shadow-sm shadow-brand-900/30"
-                    : "text-brand-100 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <item.Icon className="h-5 w-5 shrink-0" />
-                <span className={hideOnCollapse}>{item.label}</span>
-              </Link>
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  title={item.label}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                    collapsed ? "lg:justify-center lg:px-0" : ""
+                  } ${
+                    onOwnPage
+                      ? "bg-brand-600 text-white shadow-sm shadow-brand-900/30"
+                      : active
+                        ? "bg-white/10 text-white"
+                        : "text-brand-100 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <item.Icon className="h-5 w-5 shrink-0" />
+                  <span className={hideOnCollapse}>{item.label}</span>
+                  {hasChildren && (
+                    <ChevronDown
+                      className={`ml-auto h-4 w-4 shrink-0 transition-transform ${hideOnCollapse} ${
+                        showChildren ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </Link>
+                {showChildren && (
+                  <div className="mt-1 space-y-1 border-l border-white/10 pl-3 ml-5">
+                    {children!.map((child) => {
+                      const childActive =
+                        pathname === child.href ||
+                        pathname.startsWith(child.href + "/");
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={() => setOpen(false)}
+                          className={`block rounded-lg px-3 py-2 text-sm transition ${
+                            childActive
+                              ? "bg-white/10 font-medium text-white"
+                              : "text-brand-100 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
