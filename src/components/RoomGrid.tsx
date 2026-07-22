@@ -133,7 +133,12 @@ function Legend({ className }: { className?: string }) {
 }
 
 /* --------------------------------- componente --------------------------------- */
-export default function RoomGrid() {
+export default function RoomGrid({
+  publicMode = false,
+}: {
+  // Modo público (agenda sem sessão): leitura apenas, endpoints públicos.
+  publicMode?: boolean;
+} = {}) {
   const [view, setView] = useState<View>("day");
   const [date, setDate] = useState(() => ymd(new Date()));
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -177,10 +182,12 @@ export default function RoomGrid() {
 
   const load = useCallback(async () => {
     try {
+      const roomsUrl = publicMode ? "/api/public/rooms" : "/api/rooms";
+      const eventsBase = publicMode ? "/api/public/events" : "/api/events";
       const [r, e] = await Promise.all([
-        api<{ rooms: Room[] }>("/api/rooms"),
+        api<{ rooms: Room[] }>(roomsUrl),
         api<{ events: EventItem[] }>(
-          `/api/events?from=${encodeURIComponent(
+          `${eventsBase}?from=${encodeURIComponent(
             range.from.toISOString()
           )}&to=${encodeURIComponent(range.to.toISOString())}`
         ),
@@ -194,7 +201,7 @@ export default function RoomGrid() {
       setLoading(false);
       firstLoad.current = false;
     }
-  }, [range]);
+  }, [range, publicMode]);
 
   useEffect(() => {
     firstLoad.current = true;
@@ -235,12 +242,14 @@ export default function RoomGrid() {
     return new Set([...best.values()].map((v) => v.id));
   }, [events, nowTs]);
 
-  // Permissão para criar eventos (ADMIN/MANAGER)
+  // Permissão para criar eventos (ADMIN/MANAGER). No modo público não há
+  // sessão — fica sempre em leitura apenas.
   useEffect(() => {
+    if (publicMode) return;
     api<{ user: { role: string } }>("/api/auth/me")
       .then((r) => setCanManage(["ADMIN", "MANAGER"].includes(r.user.role)))
       .catch(() => {});
-  }, []);
+  }, [publicMode]);
 
   function openCreate(prefill: CreatePrefill) {
     if (!canManage || rooms.length === 0) return;

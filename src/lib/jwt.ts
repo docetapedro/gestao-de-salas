@@ -18,7 +18,7 @@ const secret = new TextEncoder().encode(
 
 const ALG = "HS256";
 export const SESSION_COOKIE = "salas_session";
-const MAX_AGE_SECONDS = 60 * 60 * 8; // 8 horas
+const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 dias
 
 export async function signSession(payload: SessionPayload): Promise<string> {
   return new SignJWT({ ...payload })
