@@ -1,8 +1,7 @@
 import "server-only";
-import fs from "node:fs";
-import path from "node:path";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
+import { TEMPLATE_BASE64 } from "./template.b64";
 
 export type ListaPresencaInput = {
   assunto?: string;
@@ -17,18 +16,11 @@ export type ListaPresencaInput = {
   linhasEmBranco?: number;
 };
 
-// O template docxtemplater é gerado por scripts/build-lista-presenca-template.mjs.
-const TEMPLATE_PATH = path.join(
-  process.cwd(),
-  "src",
-  "lib",
-  "lista-presenca",
-  "template.docx"
-);
-
+// O template docxtemplater é gerado por scripts/build-lista-presenca-template.mjs
+// e embutido em base64 (template.b64.ts) para funcionar nas serverless do Vercel.
 let templateCache: Buffer | null = null;
 function loadTemplate(): Buffer {
-  if (!templateCache) templateCache = fs.readFileSync(TEMPLATE_PATH);
+  if (!templateCache) templateCache = Buffer.from(TEMPLATE_BASE64, "base64");
   return templateCache;
 }
 

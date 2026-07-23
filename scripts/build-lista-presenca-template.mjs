@@ -131,8 +131,20 @@ function main() {
 
   zip.file('word/document.xml', xml)
   fs.mkdirSync(OUT_DIR, { recursive: true })
-  fs.writeFileSync(OUT, zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }))
+  const out = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })
+  fs.writeFileSync(OUT, out)
   console.log('Template gerado em', path.relative(root, OUT))
+
+  // Também emite o template em base64 num módulo TS, para ser incluído no
+  // bundle (as serverless functions do Vercel não leem ficheiros de src/ do disco).
+  const b64 = out.toString('base64')
+  const tsPath = path.join(OUT_DIR, 'template.b64.ts')
+  fs.writeFileSync(
+    tsPath,
+    `// GERADO por scripts/build-lista-presenca-template.mjs — não editar à mão.\n` +
+      `export const TEMPLATE_BASE64 =\n  "${b64}";\n`
+  )
+  console.log('Base64 gerado em', path.relative(root, tsPath))
 }
 
 main()
