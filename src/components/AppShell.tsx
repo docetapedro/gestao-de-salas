@@ -34,6 +34,7 @@ import {
   BoxIcon,
   BriefcaseIcon,
   CalendarIcon,
+  ClipboardListIcon,
   DoorIcon,
   GridIcon,
   KeyIcon,
@@ -69,6 +70,12 @@ const NAV: {
     Icon: BriefcaseIcon,
     modulo: "projetos",
     children: [{ href: "/projetos/despesas", label: "Despesas e Custos" }],
+  },
+  {
+    href: "/lista-presenca",
+    label: "Lista de Presença",
+    Icon: ClipboardListIcon,
+    modulo: "projetos",
   },
   { href: "/stock", label: "Gestão de Stock", Icon: BoxIcon, modulo: "stock" },
   {

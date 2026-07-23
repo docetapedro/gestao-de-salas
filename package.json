@@ -17,7 +17,8 @@
     "db:backfill:perfis": "tsx prisma/backfill-perfis.ts",
     "db:dev:generate": "prisma generate --schema prisma/schema.dev.prisma",
     "db:dev:push": "prisma db push --schema prisma/schema.dev.prisma",
-    "db:dev:setup": "prisma generate --schema prisma/schema.dev.prisma && prisma db push --schema prisma/schema.dev.prisma && tsx prisma/seed.ts"
+    "db:dev:setup": "prisma generate --schema prisma/schema.dev.prisma && prisma db push --schema prisma/schema.dev.prisma && tsx prisma/seed.ts",
+    "build:lista-presenca": "node scripts/build-lista-presenca-template.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -37,9 +38,11 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "docxtemplater": "^3.69.2",
     "jose": "^5.9.6",
     "lucide-react": "^0.468.0",
     "next": "^15.5.19",
+    "pizzip": "^3.2.0",
     "react": "^19.0.0",
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.0.0",
