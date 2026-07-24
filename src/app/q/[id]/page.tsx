@@ -6,7 +6,12 @@ import { CheckCircle2, Clock, Loader2, Trophy } from "lucide-react";
 
 type Opcao = { id: string; texto: string };
 type Pergunta = { id: string; enunciado: string; opcoes: Opcao[] };
-type Equipa = { id: string; nome: string; cor: string };
+type Equipa = {
+  id: string;
+  nome: string;
+  cor: string;
+  membros: { nome: string }[];
+};
 type Quiz = {
   id: string;
   nome: string;
@@ -113,6 +118,8 @@ export default function QuizPublicoPage({
   const perguntas = quiz?.perguntas ?? [];
   const atual = perguntas[idx];
   const ultima = idx >= perguntas.length - 1;
+  const membrosEquipa =
+    equipas.find((e) => e.id === equipaId)?.membros ?? [];
 
   // -------------------------------------------------------------- estados
 
@@ -221,7 +228,10 @@ export default function QuizPublicoPage({
             return (
               <button
                 key={eq.id}
-                onClick={() => setEquipaId(eq.id)}
+                onClick={() => {
+                  setEquipaId(eq.id);
+                  setNome("");
+                }}
                 className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm font-semibold transition ${
                   sel
                     ? "border-transparent text-white shadow"
@@ -244,18 +254,45 @@ export default function QuizPublicoPage({
           </p>
         )}
 
-        <label className="mb-1 block text-sm font-semibold text-slate-700">
-          O teu nome
-        </label>
-        <input
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          placeholder="Ex.: Maria João"
-          className="mb-6 h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        />
+        {equipaId && (
+          <>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">
+              O teu nome
+            </label>
+            {membrosEquipa.length > 0 ? (
+              <div className="mb-6 grid grid-cols-2 gap-2">
+                {membrosEquipa.map((m) => {
+                  const sel = nome === m.nome;
+                  return (
+                    <button
+                      key={m.nome}
+                      onClick={() => setNome(m.nome)}
+                      className={`truncate rounded-xl border-2 px-3 py-2.5 text-left text-sm font-medium transition ${
+                        sel
+                          ? "border-brand-500 bg-brand-50 text-navy"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      {m.nome}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                Esta equipa ainda não tem membros cadastrados. Pede ao
+                organizador para os adicionar.
+              </p>
+            )}
+          </>
+        )}
 
         <div className="mt-auto">
-          {quiz?.tempoLimiteSeg ? (
+          {perguntas.length === 0 ? (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-sm text-amber-700">
+              Este quiz ainda não tem perguntas. Avisa o organizador.
+            </p>
+          ) : quiz?.tempoLimiteSeg ? (
             <p className="mb-3 flex items-center justify-center gap-1.5 text-sm text-slate-500">
               <Clock className="h-4 w-4" /> Tens {quiz.tempoLimiteSeg}s — quanto
               mais rápido e certo, mais pontos!

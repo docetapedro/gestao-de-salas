@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   Crown,
   Gamepad2,
   ListChecks,
+  Maximize,
   Medal,
   Pencil,
   Plus,
@@ -657,6 +658,7 @@ function QuizControloModal({
 }) {
   const [aberto, setAberto] = useState(dinamica.quizAberto);
   const [qr, setQr] = useState<string>("");
+  const [projetar, setProjetar] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [submissoes, setSubmissoes] = useState<
     { id: string; nomeMembro: string; certas: number; totalPerguntas: number; pontos: number; equipa: { nome: string; cor: string } }[]
@@ -669,7 +671,8 @@ function QuizControloModal({
       : `/q/${dinamica.id}`;
 
   useEffect(() => {
-    QRCode.toDataURL(url, { width: 320, margin: 1 })
+    // Alta resolução para projeção (mostrado reduzido no modal).
+    QRCode.toDataURL(url, { width: 1024, margin: 1 })
       .then(setQr)
       .catch(() => setQr(""));
   }, [url]);
@@ -748,9 +751,18 @@ function QuizControloModal({
             </div>
           )}
           <p className="text-center text-xs text-slate-500">
-            Projeta ou imprime este QR Code. Cada membro lê, escolhe a equipa,
-            escreve o nome e responde.
+            Projeta ou imprime este QR Code. Cada membro lê, escolhe a equipa e
+            o seu nome, e responde.
           </p>
+          <Button
+            variant="navy"
+            size="sm"
+            className="w-full"
+            onClick={() => setProjetar(true)}
+            disabled={!qr}
+          >
+            <Maximize className="h-4 w-4" /> Projetar em ecrã cheio
+          </Button>
           <div className="flex w-full items-center gap-2">
             <input
               readOnly
@@ -762,6 +774,15 @@ function QuizControloModal({
             </Button>
           </div>
         </div>
+
+        {projetar && (
+          <QrProjecao
+            url={url}
+            qr={qr}
+            titulo={dinamica.nome}
+            onClose={() => setProjetar(false)}
+          />
+        )}
 
         <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
           <div>
@@ -831,6 +852,105 @@ function QuizControloModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* ==================== Projeção do QR em ecrã cheio ===================== */
+
+function QrProjecao({
+  url,
+  qr,
+  titulo,
+  onClose,
+}: {
+  url: string;
+  qr: string;
+  titulo: string;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fs, setFs] = useState(false);
+
+  useEffect(() => {
+    const onFs = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  // Fecha com ESC (quando não está em fullscreen nativo).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.fullscreenElement) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function toggleFs() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await ref.current?.requestFullscreen();
+    } catch {
+      /* alguns browsers bloqueiam sem gesto — ignora */
+    }
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-6 bg-white px-6 py-8"
+    >
+      <div className="absolute right-4 top-4 flex gap-2">
+        <button
+          onClick={toggleFs}
+          title="Ecrã cheio"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+        >
+          <Maximize className="h-5 w-5" />
+        </button>
+        <button
+          onClick={() => {
+            if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+            onClose();
+          }}
+          title="Fechar"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="text-center">
+        <p className="text-sm font-semibold uppercase tracking-widest text-brand-500">
+          Lê o QR Code para responder
+        </p>
+        <h1 className="mt-1 text-3xl font-black text-navy sm:text-5xl">{titulo}</h1>
+      </div>
+
+      {qr && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={qr}
+          alt="QR Code do quiz"
+          className="h-[55vh] max-h-[70vw] w-auto max-w-full rounded-2xl border border-slate-200 shadow-lg"
+        />
+      )}
+
+      <p className="max-w-xl text-center text-lg text-slate-500">
+        Aponta a câmara do telemóvel ao código, escolhe a tua equipa e o teu
+        nome, e responde o mais rápido e certo possível!
+      </p>
+      <p className="text-sm text-slate-400">{url}</p>
+
+      {!fs && (
+        <button
+          onClick={toggleFs}
+          className="mt-2 inline-flex items-center gap-2 rounded-full bg-navy px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          <Maximize className="h-4 w-4" /> Entrar em ecrã cheio
+        </button>
+      )}
+    </div>
   );
 }
 

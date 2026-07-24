@@ -35,7 +35,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const equipas = await prisma.equipa.findMany({
       where: { eventoId: dinamica.eventoId },
       orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
-      select: { id: true, nome: true, cor: true },
+      select: {
+        id: true,
+        nome: true,
+        cor: true,
+        membros: { orderBy: { nome: "asc" }, select: { nome: true } },
+      },
     });
 
     return json({

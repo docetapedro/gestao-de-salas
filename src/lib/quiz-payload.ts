@@ -42,31 +42,39 @@ export async function gravarPerguntas(
 ): Promise<void> {
   const lista = Array.isArray(perguntas) ? (perguntas as PerguntaIn[]) : [];
 
-  await prisma.$transaction(async (tx) => {
-    await tx.quizPergunta.deleteMany({ where: { dinamicaId } });
+  // Transação em LOTE (array) em vez de interativa (callback): é segura com
+  // ligações "pooled" (ex.: Neon/PgBouncer em produção), onde a forma
+  // interativa pode falhar e deixar a dinâmica sem perguntas.
+  const ops: unknown[] = [
+    prisma.quizPergunta.deleteMany({ where: { dinamicaId } }),
+  ];
 
-    let ordemP = 0;
-    for (const p of lista) {
-      const enunciado = String(p?.enunciado ?? "").trim();
-      const opcoesIn = Array.isArray(p?.opcoes) ? (p.opcoes as OpcaoIn[]) : [];
-      const opcoes = opcoesIn
-        .map((o, i) => ({
-          texto: String(o?.texto ?? "").trim(),
-          correta: Boolean(o?.correta),
-          ordem: i,
-        }))
-        .filter((o) => o.texto.length > 0);
+  let ordemP = 0;
+  for (const p of lista) {
+    const enunciado = String(p?.enunciado ?? "").trim();
+    const opcoesIn = Array.isArray(p?.opcoes) ? (p.opcoes as OpcaoIn[]) : [];
+    const opcoes = opcoesIn
+      .map((o, i) => ({
+        texto: String(o?.texto ?? "").trim(),
+        correta: Boolean(o?.correta),
+        ordem: i,
+      }))
+      .filter((o) => o.texto.length > 0);
 
-      if (!enunciado || opcoes.length === 0) continue;
+    if (!enunciado || opcoes.length === 0) continue;
 
-      await tx.quizPergunta.create({
+    ops.push(
+      prisma.quizPergunta.create({
         data: {
           dinamicaId,
           enunciado,
           ordem: ordemP++,
           opcoes: { create: opcoes },
         },
-      });
-    }
-  });
+      })
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await prisma.$transaction(ops as any);
 }
