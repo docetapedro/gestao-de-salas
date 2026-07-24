@@ -574,34 +574,36 @@ function DinamicasTab({
                     </p>
                   )}
                 </div>
-                <div className="flex gap-1 md:opacity-0 md:transition md:group-hover:opacity-100">
+                <div className="flex items-center gap-1">
+                  {/* QR/controlo sempre visível para quizzes */}
                   {d.tipo === "quiz" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 border-brand-200 text-brand-700 hover:bg-brand-50"
+                      onClick={() => setControlo(d)}
+                    >
+                      <QrCode className="h-4 w-4" /> QR
+                    </Button>
+                  )}
+                  <div className="flex gap-1 md:opacity-0 md:transition md:group-hover:opacity-100">
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7 text-brand-600 opacity-100"
-                      title="QR Code e controlo"
-                      onClick={() => setControlo(d)}
+                      className="h-7 w-7"
+                      onClick={() => setModal(d)}
                     >
-                      <QrCode className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" />
                     </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => setModal(d)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => setRemover(d)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => setRemover(d)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -970,6 +972,7 @@ function DinamicaForm({
     <Modal
       title={dinamica ? "Editar dinâmica" : "Nova dinâmica"}
       onClose={onClose}
+      maxWidth={tipo === "quiz" ? "max-w-2xl" : "max-w-md"}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>

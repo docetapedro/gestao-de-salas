@@ -33,7 +33,7 @@ export function Modal({
         <DialogHeader className="border-b border-slate-100 px-5 py-4">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="p-5">{children}</div>
+        <div className="max-h-[70vh] overflow-y-auto p-5">{children}</div>
         {footer && (
           <DialogFooter className="border-t border-slate-100 px-5 py-4 sm:justify-stretch [&>*]:flex-1">
             {footer}
