@@ -82,12 +82,6 @@ export async function rankingEvento(eventoId: string): Promise<LinhaRanking[]> {
       a.nome.localeCompare(b.nome)
   );
 
-  // Posição com empates partilhados (mesma pontuação → mesma posição).
-  let posicao = 0;
-  let anterior: number | null = null;
-  return linhas.map((l, i) => {
-    if (anterior === null || l.total !== anterior) posicao = i + 1;
-    anterior = l.total;
-    return { ...l, posicao };
-  });
+  // Posição sequencial (1, 2, 3, …) — sem empates partilhados.
+  return linhas.map((l, i) => ({ ...l, posicao: i + 1 }));
 }
