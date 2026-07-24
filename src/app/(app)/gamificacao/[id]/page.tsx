@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -14,18 +14,25 @@ import { Modal, ConfirmDialog } from "@/components/Modal";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  Check,
+  Copy,
   Crown,
   Gamepad2,
+  ListChecks,
   Medal,
   Pencil,
   Plus,
+  QrCode,
+  Radio,
   Save,
+  Timer,
   Trash2,
   Trophy,
   Users,
   UserPlus,
   X,
 } from "lucide-react";
+import QRCode from "qrcode";
 
 // Paleta (cliente) — igual à sugerida no servidor, para escolher cores de equipa.
 const CORES = [
@@ -43,13 +50,30 @@ type Equipa = {
   membros: Membro[];
 };
 type Classificacao = { id: string; equipaId: string; pontos: number };
+type QuizOpcao = { id: string; texto: string; correta: boolean };
+type QuizPergunta = { id: string; enunciado: string; opcoes: QuizOpcao[] };
+type QuizSubmissao = {
+  id: string;
+  nomeMembro: string;
+  equipaId: string;
+  certas: number;
+  totalPerguntas: number;
+  pontos: number;
+};
 type Dinamica = {
   id: string;
   nome: string;
   descricao: string | null;
   peso: number;
   ordem: number;
+  tipo: string; // "manual" | "quiz"
+  quizAberto: boolean;
+  valorPorAcerto: number;
+  bonusRapidezMax: number;
+  tempoLimiteSeg: number | null;
   classificacoes: Classificacao[];
+  perguntas: QuizPergunta[];
+  submissoes: QuizSubmissao[];
 };
 type Evento = {
   id: string;
@@ -477,6 +501,7 @@ function DinamicasTab({
 }) {
   const [modal, setModal] = useState<null | Dinamica | {}>(null);
   const [remover, setRemover] = useState<Dinamica | null>(null);
+  const [controlo, setControlo] = useState<Dinamica | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function excluir() {
@@ -519,10 +544,20 @@ function DinamicasTab({
                   {i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-navy">{d.nome}</p>
                     {d.peso !== 1 && (
                       <Badge variant="secondary">×{nf(d.peso)}</Badge>
+                    )}
+                    {d.tipo === "quiz" && (
+                      <Badge className="gap-1 bg-brand-100 text-brand-700 hover:bg-brand-100">
+                        <ListChecks className="h-3 w-3" /> Quiz
+                      </Badge>
+                    )}
+                    {d.tipo === "quiz" && d.quizAberto && (
+                      <Badge className="gap-1 bg-green-100 text-green-700 hover:bg-green-100">
+                        <Radio className="h-3 w-3" /> Aberto
+                      </Badge>
                     )}
                   </div>
                   {d.descricao && (
@@ -530,8 +565,27 @@ function DinamicasTab({
                       {d.descricao}
                     </p>
                   )}
+                  {d.tipo === "quiz" && (
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {d.perguntas.length} pergunta
+                      {d.perguntas.length === 1 ? "" : "s"} ·{" "}
+                      {d.submissoes.length} resposta
+                      {d.submissoes.length === 1 ? "" : "s"}
+                    </p>
+                  )}
                 </div>
-                <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                <div className="flex gap-1 md:opacity-0 md:transition md:group-hover:opacity-100">
+                  {d.tipo === "quiz" && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-brand-600 opacity-100"
+                      title="QR Code e controlo"
+                      onClick={() => setControlo(d)}
+                    >
+                      <QrCode className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     size="icon"
                     variant="ghost"
@@ -577,8 +631,218 @@ function DinamicasTab({
           onCancel={() => setRemover(null)}
         />
       )}
+      {controlo && (
+        <QuizControloModal
+          dinamica={controlo}
+          onClose={() => setControlo(null)}
+          onChange={onChange}
+        />
+      )}
     </div>
   );
+}
+
+/* ===================== Controlo do quiz (QR + abrir) ==================== */
+
+function QuizControloModal({
+  dinamica,
+  onClose,
+  onChange,
+}: {
+  dinamica: Dinamica;
+  onClose: () => void;
+  onChange: () => void;
+}) {
+  const [aberto, setAberto] = useState(dinamica.quizAberto);
+  const [qr, setQr] = useState<string>("");
+  const [copiado, setCopiado] = useState(false);
+  const [submissoes, setSubmissoes] = useState<
+    { id: string; nomeMembro: string; certas: number; totalPerguntas: number; pontos: number; equipa: { nome: string; cor: string } }[]
+  >([]);
+  const [busy, setBusy] = useState(false);
+
+  const url =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/q/${dinamica.id}`
+      : `/q/${dinamica.id}`;
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { width: 320, margin: 1 })
+      .then(setQr)
+      .catch(() => setQr(""));
+  }, [url]);
+
+  const carregarSubs = useCallback(async () => {
+    try {
+      const d = await api<{ submissoes: typeof submissoes }>(
+        `/api/gamificacao/dinamicas/${dinamica.id}/submissoes`
+      );
+      setSubmissoes(d.submissoes);
+    } catch {
+      /* ignora falhas de polling */
+    }
+  }, [dinamica.id]);
+
+  useEffect(() => {
+    carregarSubs();
+    const t = setInterval(carregarSubs, 4000);
+    return () => clearInterval(t);
+  }, [carregarSubs]);
+
+  async function toggleAberto() {
+    const novo = !aberto;
+    setBusy(true);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ quizAberto: novo }),
+      });
+      setAberto(novo);
+      toast.success(novo ? "Quiz aberto a respostas" : "Quiz fechado");
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function copiar() {
+    navigator.clipboard?.writeText(url).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1500);
+    });
+  }
+
+  return (
+    <Modal
+      title={`Quiz — ${dinamica.nome}`}
+      onClose={onClose}
+      footer={
+        <Button variant="outline" onClick={onClose}>
+          Fechar
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {dinamica.perguntas.length === 0 && (
+          <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            Este quiz ainda não tem perguntas. Edita a dinâmica para as
+            adicionar.
+          </div>
+        )}
+
+        <div className="flex flex-col items-center gap-2">
+          {qr ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={qr}
+              alt="QR Code do quiz"
+              className="h-56 w-56 rounded-xl border border-slate-200"
+            />
+          ) : (
+            <div className="flex h-56 w-56 items-center justify-center rounded-xl border border-slate-200 text-slate-300">
+              <QrCode className="h-10 w-10" />
+            </div>
+          )}
+          <p className="text-center text-xs text-slate-500">
+            Projeta ou imprime este QR Code. Cada membro lê, escolhe a equipa,
+            escreve o nome e responde.
+          </p>
+          <div className="flex w-full items-center gap-2">
+            <input
+              readOnly
+              value={url}
+              className="h-9 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs text-slate-600 outline-none"
+            />
+            <Button size="sm" variant="outline" onClick={copiar}>
+              {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
+          <div>
+            <p className="text-sm font-semibold text-navy">
+              {aberto ? "Aberto a respostas" : "Fechado"}
+            </p>
+            <p className="text-xs text-slate-400">
+              {aberto
+                ? "Os membros já podem responder."
+                : "Abre quando quiseres começar."}
+            </p>
+          </div>
+          <Button
+            variant={aberto ? "outline" : "navy"}
+            size="sm"
+            disabled={busy || dinamica.perguntas.length === 0}
+            onClick={toggleAberto}
+          >
+            <Radio className="h-4 w-4" /> {aberto ? "Fechar" : "Abrir quiz"}
+          </Button>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-700">
+              Respostas ({submissoes.length})
+            </p>
+            <span className="flex items-center gap-1 text-xs text-slate-400">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-400" />
+              </span>
+              ao vivo
+            </span>
+          </div>
+          {submissoes.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400">
+              Ainda sem respostas.
+            </p>
+          ) : (
+            <div className="max-h-52 space-y-1.5 overflow-y-auto">
+              {submissoes.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                >
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: s.equipa.cor }}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium text-slate-700">
+                    {s.nomeMembro}
+                  </span>
+                  <span className="shrink-0 text-xs text-slate-400">
+                    {s.equipa.nome}
+                  </span>
+                  <span className="shrink-0 text-xs text-slate-500">
+                    {s.certas}/{s.totalPerguntas}
+                  </span>
+                  <span className="w-12 shrink-0 text-right font-bold text-navy">
+                    {nf(s.pontos)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+type OpcaoEdit = { texto: string; correta: boolean };
+type PerguntaEdit = { enunciado: string; opcoes: OpcaoEdit[] };
+
+function novaPergunta(): PerguntaEdit {
+  return {
+    enunciado: "",
+    opcoes: [
+      { texto: "", correta: true },
+      { texto: "", correta: false },
+    ],
+  };
 }
 
 function DinamicaForm({
@@ -595,24 +859,74 @@ function DinamicaForm({
   const [nome, setNome] = useState(dinamica?.nome ?? "");
   const [descricao, setDescricao] = useState(dinamica?.descricao ?? "");
   const [peso, setPeso] = useState(String(dinamica?.peso ?? 1));
+  const [tipo, setTipo] = useState<"manual" | "quiz">(
+    dinamica?.tipo === "quiz" ? "quiz" : "manual"
+  );
+  const [valorPorAcerto, setValorPorAcerto] = useState(
+    String(dinamica?.valorPorAcerto ?? 10)
+  );
+  const [bonusRapidezMax, setBonusRapidezMax] = useState(
+    String(dinamica?.bonusRapidezMax ?? 20)
+  );
+  const [tempoLimiteSeg, setTempoLimiteSeg] = useState(
+    dinamica?.tempoLimiteSeg != null ? String(dinamica.tempoLimiteSeg) : ""
+  );
+  const [perguntas, setPerguntas] = useState<PerguntaEdit[]>(
+    dinamica?.perguntas?.length
+      ? dinamica.perguntas.map((p) => ({
+          enunciado: p.enunciado,
+          opcoes: p.opcoes.map((o) => ({ texto: o.texto, correta: o.correta })),
+        }))
+      : [novaPergunta()]
+  );
   const [saving, setSaving] = useState(false);
+
+  const quizInvalido =
+    tipo === "quiz" &&
+    !perguntas.some(
+      (p) =>
+        p.enunciado.trim() &&
+        p.opcoes.filter((o) => o.texto.trim()).length >= 2 &&
+        p.opcoes.some((o) => o.correta && o.texto.trim())
+    );
 
   async function salvar() {
     if (!nome.trim()) return;
+    if (tipo === "quiz" && quizInvalido) {
+      toast.error(
+        "Cada pergunta precisa de enunciado, ≥2 opções e uma opção correta."
+      );
+      return;
+    }
     setSaving(true);
     try {
+      const payload: Record<string, unknown> = {
+        eventoId,
+        nome: nome.trim(),
+        descricao: descricao.trim() || null,
+        peso: Number(peso) || 1,
+        tipo,
+      };
+      if (tipo === "quiz") {
+        payload.valorPorAcerto = Number(valorPorAcerto);
+        payload.bonusRapidezMax = Number(bonusRapidezMax);
+        payload.tempoLimiteSeg = tempoLimiteSeg.trim() || null;
+        payload.perguntas = perguntas
+          .filter((p) => p.enunciado.trim())
+          .map((p) => ({
+            enunciado: p.enunciado.trim(),
+            opcoes: p.opcoes
+              .filter((o) => o.texto.trim())
+              .map((o) => ({ texto: o.texto.trim(), correta: o.correta })),
+          }));
+      }
       await api(
         dinamica
           ? `/api/gamificacao/dinamicas/${dinamica.id}`
           : "/api/gamificacao/dinamicas",
         {
           method: dinamica ? "PUT" : "POST",
-          body: JSON.stringify({
-            eventoId,
-            nome: nome.trim(),
-            descricao: descricao.trim() || null,
-            peso: Number(peso) || 1,
-          }),
+          body: JSON.stringify(payload),
         }
       );
       toast.success(dinamica ? "Dinâmica actualizada" : "Dinâmica criada");
@@ -622,6 +936,34 @@ function DinamicaForm({
     } finally {
       setSaving(false);
     }
+  }
+
+  /* --- helpers do editor de perguntas --- */
+  function updPergunta(i: number, patch: Partial<PerguntaEdit>) {
+    setPerguntas((ps) => ps.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+  function updOpcao(pi: number, oi: number, patch: Partial<OpcaoEdit>) {
+    setPerguntas((ps) =>
+      ps.map((p, idx) =>
+        idx === pi
+          ? {
+              ...p,
+              opcoes: p.opcoes.map((o, j) =>
+                j === oi ? { ...o, ...patch } : o
+              ),
+            }
+          : p
+      )
+    );
+  }
+  function marcarCorreta(pi: number, oi: number) {
+    setPerguntas((ps) =>
+      ps.map((p, idx) =>
+        idx === pi
+          ? { ...p, opcoes: p.opcoes.map((o, j) => ({ ...o, correta: j === oi })) }
+          : p
+      )
+    );
   }
 
   return (
@@ -671,6 +1013,186 @@ function DinamicaForm({
             Peso desta dinâmica no ranking (1 = normal, 2 = pontos a dobrar).
           </p>
         </div>
+
+        <div>
+          <Label className="mb-1 block">Tipo de dinâmica</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setTipo("manual")}
+              className={`rounded-lg border-2 px-3 py-2 text-left text-sm transition ${
+                tipo === "manual"
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <span className="font-semibold text-navy">Manual</span>
+              <span className="block text-xs text-slate-400">
+                Pontuação lançada à mão
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipo("quiz")}
+              className={`rounded-lg border-2 px-3 py-2 text-left text-sm transition ${
+                tipo === "quiz"
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <span className="font-semibold text-navy">Quiz (QR Code)</span>
+              <span className="block text-xs text-slate-400">
+                Membros respondem pelo telemóvel
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {tipo === "quiz" && (
+          <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            {/* Config de pontuação */}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="mb-1 block text-xs">Pontos/acerto</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={valorPorAcerto}
+                  onChange={(e) => setValorPorAcerto(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block text-xs">Bónus rapidez</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={bonusRapidezMax}
+                  onChange={(e) => setBonusRapidezMax(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="mb-1 flex items-center gap-1 text-xs">
+                  <Timer className="h-3 w-3" /> Tempo (s)
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="5"
+                  placeholder="s/ limite"
+                  value={tempoLimiteSeg}
+                  onChange={(e) => setTempoLimiteSeg(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="-mt-2 text-xs text-slate-400">
+              Pontos = acertos × pontos/acerto + bónus (só com limite de tempo:
+              quanto mais rápido e certo, maior o bónus). A pontuação da equipa é
+              a soma dos membros.
+            </p>
+
+            {/* Perguntas */}
+            <div className="space-y-3">
+              {perguntas.map((p, pi) => (
+                <div
+                  key={pi}
+                  className="rounded-lg border border-slate-200 bg-white p-3"
+                >
+                  <div className="mb-2 flex items-start gap-2">
+                    <span className="mt-1.5 text-xs font-bold text-slate-400">
+                      {pi + 1}.
+                    </span>
+                    <Textarea
+                      rows={2}
+                      value={p.enunciado}
+                      onChange={(e) =>
+                        updPergunta(pi, { enunciado: e.target.value })
+                      }
+                      placeholder="Enunciado da pergunta"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() =>
+                        setPerguntas((ps) => ps.filter((_, idx) => idx !== pi))
+                      }
+                      disabled={perguntas.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-1.5 pl-5">
+                    {p.opcoes.map((o, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => marcarCorreta(pi, oi)}
+                          title="Marcar como correta"
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                            o.correta
+                              ? "border-green-500 bg-green-500 text-white"
+                              : "border-slate-300 hover:border-green-400"
+                          }`}
+                        >
+                          {o.correta && <Check className="h-4 w-4" />}
+                        </button>
+                        <Input
+                          value={o.texto}
+                          onChange={(e) =>
+                            updOpcao(pi, oi, { texto: e.target.value })
+                          }
+                          placeholder={`Opção ${oi + 1}`}
+                          className="h-9"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0 text-slate-400"
+                          onClick={() =>
+                            updPergunta(pi, {
+                              opcoes: p.opcoes.filter((_, j) => j !== oi),
+                            })
+                          }
+                          disabled={p.opcoes.length <= 2}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-brand-600"
+                      onClick={() =>
+                        updPergunta(pi, {
+                          opcoes: [...p.opcoes, { texto: "", correta: false }],
+                        })
+                      }
+                    >
+                      <Plus className="h-4 w-4" /> Opção
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setPerguntas((ps) => [...ps, novaPergunta()])}
+              >
+                <Plus className="h-4 w-4" /> Adicionar pergunta
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -685,16 +1207,22 @@ function PontosTab({
   evento: Evento;
   onSaved: () => void;
 }) {
+  // Só dinâmicas manuais — as de quiz são pontuadas automaticamente.
+  const manuais = useMemo(
+    () => evento.dinamicas.filter((d) => d.tipo !== "quiz"),
+    [evento]
+  );
+
   // Valor original (do servidor) por célula.
   const original = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const d of evento.dinamicas) {
+    for (const d of manuais) {
       for (const c of d.classificacoes) {
         map[cellKey(d.id, c.equipaId)] = String(c.pontos);
       }
     }
     return map;
-  }, [evento]);
+  }, [manuais]);
 
   const [grid, setGrid] = useState<Record<string, string>>(original);
   const [saving, setSaving] = useState(false);
@@ -712,19 +1240,19 @@ function PontosTab({
   const totais = useMemo(() => {
     const t: Record<string, number> = {};
     for (const eq of evento.equipas) t[eq.id] = 0;
-    for (const d of evento.dinamicas) {
+    for (const d of manuais) {
       for (const eq of evento.equipas) {
         const v = Number(grid[cellKey(d.id, eq.id)] ?? 0) || 0;
         t[eq.id] += v * (d.peso ?? 1);
       }
     }
     return t;
-  }, [grid, evento]);
+  }, [grid, evento.equipas, manuais]);
 
   async function salvar() {
     const lancamentos: { dinamicaId: string; equipaId: string; pontos: number }[] =
       [];
-    for (const d of evento.dinamicas) {
+    for (const d of manuais) {
       for (const eq of evento.equipas) {
         const k = cellKey(d.id, eq.id);
         if ((grid[k] ?? "") !== (original[k] ?? "")) {
@@ -752,11 +1280,13 @@ function PontosTab({
     }
   }
 
-  if (evento.equipas.length === 0 || evento.dinamicas.length === 0) {
+  if (evento.equipas.length === 0 || manuais.length === 0) {
     return (
       <Card>
         <CardContent className="p-10 text-center text-slate-400">
-          Cria pelo menos uma equipa e uma dinâmica para lançar pontuações.
+          {evento.equipas.length === 0
+            ? "Cria pelo menos uma equipa e uma dinâmica para lançar pontuações."
+            : "Não há dinâmicas manuais. As dinâmicas de quiz são pontuadas automaticamente pelas respostas."}
         </CardContent>
       </Card>
     );
@@ -798,7 +1328,7 @@ function PontosTab({
               </tr>
             </thead>
             <tbody>
-              {evento.dinamicas.map((d) => (
+              {manuais.map((d) => (
                 <tr key={d.id} className="border-t border-slate-100">
                   <td className="sticky left-0 z-10 bg-white px-3 py-2">
                     <div className="font-medium text-slate-700">{d.nome}</div>

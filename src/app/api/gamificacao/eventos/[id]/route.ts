@@ -20,7 +20,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
         },
         dinamicas: {
           orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
-          include: { classificacoes: true },
+          include: {
+            classificacoes: true,
+            perguntas: {
+              orderBy: { ordem: "asc" },
+              include: { opcoes: { orderBy: { ordem: "asc" } } },
+            },
+            submissoes: { orderBy: { createdAt: "desc" } },
+          },
         },
       },
     });

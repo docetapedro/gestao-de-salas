@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
+import { gravarPerguntas, lerConfigQuiz } from "@/lib/quiz-payload";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,6 +17,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
       const p = Number(body.peso);
       peso = Number.isFinite(p) && p > 0 ? p : 1;
     }
+
+    // Se o body traz configuração de quiz (guardar do editor), aplica-a; caso
+    // contrário (ex.: só abrir/fechar), não mexe nestes campos.
+    const temConfigQuiz =
+      body.valorPorAcerto !== undefined ||
+      body.bonusRapidezMax !== undefined ||
+      body.tempoLimiteSeg !== undefined;
+    const cfg = temConfigQuiz ? lerConfigQuiz(body) : {};
+
     const dinamica = await prisma.dinamica.update({
       where: { id },
       data: {
@@ -29,8 +39,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
         peso,
         ordem:
           body.ordem !== undefined ? Math.trunc(Number(body.ordem)) : undefined,
+        tipo:
+          body.tipo !== undefined
+            ? body.tipo === "quiz"
+              ? "quiz"
+              : "manual"
+            : undefined,
+        quizAberto:
+          body.quizAberto !== undefined ? Boolean(body.quizAberto) : undefined,
+        ...cfg,
       },
     });
+
+    if (Array.isArray(body.perguntas)) {
+      await gravarPerguntas(id, body.perguntas);
+    }
+
     return json({ dinamica });
   } catch (err) {
     return handleError(err);
