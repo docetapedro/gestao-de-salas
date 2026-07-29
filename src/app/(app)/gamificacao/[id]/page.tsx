@@ -664,6 +664,30 @@ function QuizControloModal({
     { id: string; nomeMembro: string; certas: number; totalPerguntas: number; pontos: number; equipa: { nome: string; cor: string } }[]
   >([]);
   const [busy, setBusy] = useState(false);
+  const [vista, setVista] = useState<"pessoa" | "equipa">("pessoa");
+  const [aEliminar, setAEliminar] = useState<string | null>(null);
+  const [confirmarLimpar, setConfirmarLimpar] = useState(false);
+
+  const numPerguntas = dinamica.perguntas.length;
+
+  // Ranking por equipa = soma dos pontos dos membros ÷ nº de perguntas do quiz.
+  const rankingEquipas = useMemo(() => {
+    const mapa = new Map<
+      string,
+      { nome: string; cor: string; soma: number; membros: number }
+    >();
+    for (const s of submissoes) {
+      const chave = s.equipa.nome;
+      const atual =
+        mapa.get(chave) ?? { nome: s.equipa.nome, cor: s.equipa.cor, soma: 0, membros: 0 };
+      atual.soma += s.pontos;
+      atual.membros += 1;
+      mapa.set(chave, atual);
+    }
+    return [...mapa.values()]
+      .map((e) => ({ ...e, media: numPerguntas > 0 ? e.soma / numPerguntas : 0 }))
+      .sort((a, b) => b.media - a.media);
+  }, [submissoes, numPerguntas]);
 
   const url =
     typeof window !== "undefined"
@@ -717,6 +741,41 @@ function QuizControloModal({
       setCopiado(true);
       setTimeout(() => setCopiado(false), 1500);
     });
+  }
+
+  async function eliminarSubmissao(submissaoId: string) {
+    setAEliminar(submissaoId);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}/submissoes`, {
+        method: "DELETE",
+        body: JSON.stringify({ submissaoId }),
+      });
+      await carregarSubs();
+      onChange();
+      toast.success("Resposta eliminada");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAEliminar(null);
+    }
+  }
+
+  async function eliminarTodas() {
+    setBusy(true);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}/submissoes`, {
+        method: "DELETE",
+        body: JSON.stringify({}),
+      });
+      await carregarSubs();
+      onChange();
+      toast.success("Todas as respostas foram eliminadas");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+      setConfirmarLimpar(false);
+    }
   }
 
   return (
@@ -818,11 +877,38 @@ function QuizControloModal({
               ao vivo
             </span>
           </div>
+
+          {/* Alternar entre ranking por pessoa e por equipa. */}
+          <div className="mb-2 inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setVista("pessoa")}
+              className={`rounded-md px-3 py-1 transition ${
+                vista === "pessoa"
+                  ? "bg-white text-navy shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Por pessoa
+            </button>
+            <button
+              type="button"
+              onClick={() => setVista("equipa")}
+              className={`rounded-md px-3 py-1 transition ${
+                vista === "equipa"
+                  ? "bg-white text-navy shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Por equipa
+            </button>
+          </div>
+
           {submissoes.length === 0 ? (
             <p className="rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400">
               Ainda sem respostas.
             </p>
-          ) : (
+          ) : vista === "pessoa" ? (
             <div className="max-h-52 space-y-1.5 overflow-y-auto">
               {submissoes.map((s) => (
                 <div
@@ -845,12 +931,77 @@ function QuizControloModal({
                   <span className="w-12 shrink-0 text-right font-bold text-navy">
                     {nf(s.pontos)}
                   </span>
+                  <button
+                    type="button"
+                    title="Eliminar esta resposta"
+                    disabled={aEliminar === s.id}
+                    onClick={() => eliminarSubmissao(s.id)}
+                    className="shrink-0 rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="max-h-52 space-y-1.5 overflow-y-auto">
+              {rankingEquipas.map((e, i) => (
+                <div
+                  key={e.nome}
+                  className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                >
+                  <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-400">
+                    {i + 1}
+                  </span>
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: e.cor }}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium text-slate-700">
+                    {e.nome}
+                  </span>
+                  <span className="shrink-0 text-xs text-slate-400">
+                    {e.membros} {e.membros === 1 ? "membro" : "membros"}
+                  </span>
+                  <span className="w-12 shrink-0 text-right font-bold text-navy">
+                    {nf(e.media)}
+                  </span>
+                </div>
+              ))}
+              <p className="px-1 pt-1 text-[11px] text-slate-400">
+                Média = soma dos pontos dos membros ÷ {numPerguntas}{" "}
+                {numPerguntas === 1 ? "pergunta" : "perguntas"}.
+              </p>
+            </div>
+          )}
+
+          {submissoes.length > 0 && (
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => setConfirmarLimpar(true)}
+                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+              >
+                <Trash2 className="h-4 w-4" /> Eliminar todas as respostas
+              </Button>
             </div>
           )}
         </div>
       </div>
+
+      {confirmarLimpar && (
+        <ConfirmDialog
+          title="Eliminar todas as respostas?"
+          message={`Vais apagar as ${submissoes.length} respostas deste quiz e limpar a pontuação da dinâmica. Esta acção não pode ser anulada.`}
+          confirmLabel="Eliminar todas"
+          danger
+          busy={busy}
+          onConfirm={eliminarTodas}
+          onCancel={() => setConfirmarLimpar(false)}
+        />
+      )}
     </Modal>
   );
 }
