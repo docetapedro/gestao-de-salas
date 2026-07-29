@@ -33,8 +33,6 @@ import {
 import {
   BriefcaseIcon,
   BuildingIcon,
-  CalendarIcon,
-  DoorIcon,
   GraduationCapIcon,
   GridIcon,
   KeyIcon,
@@ -66,8 +64,6 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Agenda", Icon: GridIcon, modulo: "agenda" },
-  { href: "/eventos", label: "Eventos", Icon: CalendarIcon, modulo: "eventos" },
-  { href: "/salas", label: "Salas", Icon: DoorIcon, modulo: "salas" },
   {
     href: "/projetos",
     label: "Projectos",
@@ -85,7 +81,11 @@ const NAV: NavItem[] = [
   {
     label: "Gestão Administrativa",
     Icon: BuildingIcon,
-    children: [{ href: "/stock", label: "Gestão de Stock", modulo: "stock" }],
+    children: [
+      { href: "/eventos", label: "Eventos", modulo: "eventos" },
+      { href: "/salas", label: "Salas", modulo: "salas" },
+      { href: "/stock", label: "Gestão de Stock", modulo: "stock" },
+    ],
   },
   {
     href: "/gamificacao",
