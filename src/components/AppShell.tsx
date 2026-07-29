@@ -31,19 +31,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  BoxIcon,
   BriefcaseIcon,
+  BuildingIcon,
   CalendarIcon,
-  ClipboardListIcon,
   DoorIcon,
+  GraduationCapIcon,
   GridIcon,
   KeyIcon,
   LogoutIcon,
   MenuIcon,
   PanelLeftIcon,
+  ShieldIcon,
   SlidersIcon,
   TrophyIcon,
-  UsersIcon,
 } from "@/components/icons";
 
 type User = {
@@ -54,13 +54,17 @@ type User = {
   perm?: Permissoes;
 };
 
-const NAV: {
-  href: string;
+type NavChild = { href: string; label: string; modulo?: ModuloKey };
+type NavItem = {
+  // Sem `href` = grupo (só expande para mostrar os filhos, não navega).
+  href?: string;
   label: string;
   Icon: (p: { className?: string }) => React.ReactElement;
-  modulo: ModuloKey;
-  children?: { href: string; label: string }[];
-}[] = [
+  modulo?: ModuloKey;
+  children?: NavChild[];
+};
+
+const NAV: NavItem[] = [
   { href: "/dashboard", label: "Agenda", Icon: GridIcon, modulo: "agenda" },
   { href: "/eventos", label: "Eventos", Icon: CalendarIcon, modulo: "eventos" },
   { href: "/salas", label: "Salas", Icon: DoorIcon, modulo: "salas" },
@@ -72,12 +76,17 @@ const NAV: {
     children: [{ href: "/projetos/despesas", label: "Despesas e Custos" }],
   },
   {
-    href: "/lista-presenca",
-    label: "Lista de Presença",
-    Icon: ClipboardListIcon,
-    modulo: "projetos",
+    label: "Gestão Pedagógica",
+    Icon: GraduationCapIcon,
+    children: [
+      { href: "/lista-presenca", label: "Lista de Presença", modulo: "projetos" },
+    ],
   },
-  { href: "/stock", label: "Gestão de Stock", Icon: BoxIcon, modulo: "stock" },
+  {
+    label: "Gestão Administrativa",
+    Icon: BuildingIcon,
+    children: [{ href: "/stock", label: "Gestão de Stock", modulo: "stock" }],
+  },
   {
     href: "/gamificacao",
     label: "Gamificação",
@@ -85,8 +94,14 @@ const NAV: {
     modulo: "gamificacao",
   },
   { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, modulo: "cadastros" },
-  { href: "/usuarios", label: "Usuários", Icon: UsersIcon, modulo: "usuarios" },
-  { href: "/perfis", label: "Perfis", Icon: KeyIcon, modulo: "usuarios" },
+  {
+    label: "Administração",
+    Icon: ShieldIcon,
+    children: [
+      { href: "/usuarios", label: "Usuários", modulo: "usuarios" },
+      { href: "/perfis", label: "Perfis", modulo: "usuarios" },
+    ],
+  },
 ];
 
 const COLLAPSE_KEY = "salas_sidebar_collapsed";
@@ -111,6 +126,7 @@ export default function AppShell({
   const router = useRouter();
   const [open, setOpen] = useState(false); // drawer no mobile
   const [collapsed, setCollapsed] = useState(false); // recolhido no desktop
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({}); // grupos expandidos
 
   // Alterar a própria senha
   const [showPwd, setShowPwd] = useState(false);
@@ -171,9 +187,24 @@ export default function AppShell({
     router.refresh();
   }
 
-  const items = NAV.filter((n) => can(user, n.modulo, "view"));
-  const current = items.find(
-    (n) => pathname === n.href || pathname.startsWith(n.href + "/")
+  // Filtra por permissões: itens simples pelo seu módulo; grupos ficam visíveis
+  // se tiverem pelo menos um filho visível.
+  const items = NAV.map((n) => ({
+    ...n,
+    kids: (n.children ?? []).filter((c) =>
+      can(user, c.modulo ?? n.modulo!, "view")
+    ),
+  })).filter((n) =>
+    n.href ? can(user, n.modulo!, "view") : n.kids.length > 0
+  );
+
+  // Título da página: procura no href do item e no dos filhos.
+  const flat = items.flatMap((n) => [
+    ...(n.href ? [{ href: n.href, label: n.label }] : []),
+    ...n.kids.map((c) => ({ href: c.href, label: c.label })),
+  ]);
+  const current = flat.find(
+    (f) => pathname === f.href || pathname.startsWith(f.href + "/")
   );
   const pageTitle = current?.label ?? "Gestão de Salas";
 
@@ -218,47 +249,88 @@ export default function AppShell({
             </p>
           )}
           {items.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(item.href + "/");
-            // Sub-menu só aparece quando a secção está activa e o menu não está recolhido.
-            const children = item.children?.filter((c) =>
-              can(user, item.modulo, "view")
+            const isGroup = !item.href;
+            const hasChildren = item.kids.length > 0;
+            const childActive = item.kids.some(
+              (c) => pathname === c.href || pathname.startsWith(c.href + "/")
             );
-            const hasChildren = !!children?.length;
-            const showChildren = hasChildren && active && !collapsed;
-            // Realça a fundo cheio quando é a própria página; quando o activo é um
-            // sub-item, mantém um realce subtil para o pai continuar a parecer clicável.
-            const onOwnPage = pathname === item.href;
+            const active = isGroup
+              ? childActive
+              : pathname === item.href ||
+                pathname.startsWith(item.href + "/");
+            // Grupos: abertos por clique; auto-abertos quando um filho está activo.
+            const groupOpen = openGroups[item.label] ?? childActive;
+            const showChildren =
+              hasChildren && !collapsed && (isGroup ? groupOpen : active);
+            const chevronOpen = isGroup ? groupOpen : showChildren;
+            // Realça a fundo cheio só quando é a própria página do item.
+            const onOwnPage = !isGroup && pathname === item.href;
+
+            const parentClass = `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              collapsed ? "lg:justify-center lg:px-0" : ""
+            } ${
+              onOwnPage
+                ? "bg-brand-600 text-white shadow-sm shadow-brand-900/30"
+                : active
+                  ? "bg-white/10 text-white"
+                  : "text-brand-100 hover:bg-white/10 hover:text-white"
+            }`;
+            const parentInner = (
+              <>
+                <item.Icon className="h-5 w-5 shrink-0" />
+                <span className={hideOnCollapse}>{item.label}</span>
+                {hasChildren && (
+                  <ChevronDown
+                    className={`ml-auto h-4 w-4 shrink-0 transition-transform ${hideOnCollapse} ${
+                      chevronOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </>
+            );
+
             return (
-              <div key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  title={item.label}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                    collapsed ? "lg:justify-center lg:px-0" : ""
-                  } ${
-                    onOwnPage
-                      ? "bg-brand-600 text-white shadow-sm shadow-brand-900/30"
-                      : active
-                        ? "bg-white/10 text-white"
-                        : "text-brand-100 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <item.Icon className="h-5 w-5 shrink-0" />
-                  <span className={hideOnCollapse}>{item.label}</span>
-                  {hasChildren && (
-                    <ChevronDown
-                      className={`ml-auto h-4 w-4 shrink-0 transition-transform ${hideOnCollapse} ${
-                        showChildren ? "rotate-180" : ""
-                      }`}
-                    />
-                  )}
-                </Link>
+              <div key={item.label}>
+                {isGroup ? (
+                  collapsed ? (
+                    // Recolhido: sem espaço para submenu — o ícone leva ao 1º filho.
+                    <Link
+                      href={item.kids[0].href}
+                      onClick={() => setOpen(false)}
+                      title={item.label}
+                      className={parentClass}
+                    >
+                      {parentInner}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenGroups((g) => ({
+                          ...g,
+                          [item.label]: !groupOpen,
+                        }))
+                      }
+                      title={item.label}
+                      className={`w-full text-left ${parentClass}`}
+                    >
+                      {parentInner}
+                    </button>
+                  )
+                ) : (
+                  <Link
+                    href={item.href!}
+                    onClick={() => setOpen(false)}
+                    title={item.label}
+                    className={parentClass}
+                  >
+                    {parentInner}
+                  </Link>
+                )}
                 {showChildren && (
                   <div className="mt-1 space-y-1 border-l border-white/10 pl-3 ml-5">
-                    {children!.map((child) => {
-                      const childActive =
+                    {item.kids.map((child) => {
+                      const cActive =
                         pathname === child.href ||
                         pathname.startsWith(child.href + "/");
                       return (
@@ -267,7 +339,7 @@ export default function AppShell({
                           href={child.href}
                           onClick={() => setOpen(false)}
                           className={`block rounded-lg px-3 py-2 text-sm transition ${
-                            childActive
+                            cActive
                               ? "bg-white/10 font-medium text-white"
                               : "text-brand-100 hover:bg-white/10 hover:text-white"
                           }`}
