@@ -100,7 +100,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
     });
 
-    await recomputarClassificacaoQuiz(id, equipaId);
+    // A submissão é a fonte da verdade. Se o recálculo da pontuação da equipa
+    // falhar (ex.: conflito de escrita persistente sob carga), não devolvemos
+    // erro — a resposta já ficou registada e o total reconcilia na próxima
+    // submissão da equipa. Assim o membro nunca vê erro nem cai no 409.
+    try {
+      await recomputarClassificacaoQuiz(id, equipaId);
+    } catch (e) {
+      console.error("Falha ao recalcular classificação do quiz", {
+        dinamicaId: id,
+        equipaId,
+        erro: (e as Error).message,
+      });
+    }
 
     return json({ ok: true, certas, totalPerguntas, pontos });
   } catch (err) {

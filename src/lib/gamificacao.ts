@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 // Paleta sugerida para novas equipas (cores vivas, boas para projeção).
@@ -126,22 +127,49 @@ export function pontuarSubmissao(
  * Recalcula a Classificacao (equipa+dinâmica) de um quiz como a soma dos pontos
  * das submissões dessa equipa nessa dinâmica, e faz upsert. Deve ser chamado
  * após cada submissão. Devolve o total actual da equipa na dinâmica.
+ *
+ * Concorrência: a soma e a escrita correm numa transacção **Serializable**. Se
+ * vários membros da mesma equipa submeterem em simultâneo, o Postgres deteta o
+ * conflito de escrita (P2034) e nós repetimos — assim o total nunca fica
+ * subcontado por uma leitura obsoleta (lost update). Em SQLite (dev) as escritas
+ * já são serializadas, portanto o comportamento é o mesmo.
  */
 export async function recomputarClassificacaoQuiz(
   dinamicaId: string,
   equipaId: string
 ): Promise<number> {
-  const agg = await prisma.quizSubmissao.aggregate({
-    where: { dinamicaId, equipaId },
-    _sum: { pontos: true },
-  });
-  const total = Math.round((agg._sum.pontos ?? 0) * 100) / 100;
+  // Serializable só no Postgres; o SQLite (dev) não suporta níveis de isolamento
+  // e já serializa as escritas globalmente.
+  const ehPostgres = !(process.env.DATABASE_URL ?? "").startsWith("file:");
+  const opcoes = ehPostgres
+    ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    : undefined;
 
-  await prisma.classificacao.upsert({
-    where: { dinamicaId_equipaId: { dinamicaId, equipaId } },
-    create: { dinamicaId, equipaId, pontos: total },
-    update: { pontos: total },
-  });
+  const MAX_TENTATIVAS = 5;
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const agg = await tx.quizSubmissao.aggregate({
+          where: { dinamicaId, equipaId },
+          _sum: { pontos: true },
+        });
+        const total = Math.round((agg._sum.pontos ?? 0) * 100) / 100;
 
-  return total;
+        await tx.classificacao.upsert({
+          where: { dinamicaId_equipaId: { dinamicaId, equipaId } },
+          create: { dinamicaId, equipaId, pontos: total },
+          update: { pontos: total },
+        });
+
+        return total;
+      }, opcoes);
+    } catch (err) {
+      // P2034 = conflito de escrita / deadlock → repetir a transacção.
+      const conflito =
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2034";
+      if (conflito && tentativa < MAX_TENTATIVAS) continue;
+      throw err;
+    }
+  }
 }
