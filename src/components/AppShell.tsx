@@ -81,11 +81,12 @@ const NAV: NavItem[] = [
     ],
   },
   {
-    href: "/projetos",
     label: "Gestão de Projectos",
     Icon: BriefcaseIcon,
-    modulo: "projetos",
-    children: [{ href: "/projetos/despesas", label: "Despesas e Custos" }],
+    children: [
+      { href: "/projetos", label: "Projectos", modulo: "projetos" },
+      { href: "/projetos/despesas", label: "Despesas e Custos", modulo: "projetos" },
+    ],
   },
   {
     href: "/gamificacao",
@@ -203,9 +204,9 @@ export default function AppShell({
     ...(n.href ? [{ href: n.href, label: n.label }] : []),
     ...n.kids.map((c) => ({ href: c.href, label: c.label })),
   ]);
-  const current = flat.find(
-    (f) => pathname === f.href || pathname.startsWith(f.href + "/")
-  );
+  const current = flat
+    .filter((f) => pathname === f.href || pathname.startsWith(f.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0];
   const pageTitle = current?.label ?? "Gestão de Salas";
 
   // Esconde rótulos só no desktop quando recolhido (no mobile o drawer mostra tudo).
@@ -251,9 +252,15 @@ export default function AppShell({
           {items.map((item) => {
             const isGroup = !item.href;
             const hasChildren = item.kids.length > 0;
-            const childActive = item.kids.some(
-              (c) => pathname === c.href || pathname.startsWith(c.href + "/")
-            );
+            // Filho activo = o de href mais específico que corresponde à rota
+            // (evita /projetos e /projetos/despesas acenderem ao mesmo tempo).
+            const activeChildHref = item.kids
+              .filter(
+                (c) =>
+                  pathname === c.href || pathname.startsWith(c.href + "/")
+              )
+              .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+            const childActive = !!activeChildHref;
             const active = isGroup
               ? childActive
               : pathname === item.href ||
@@ -330,9 +337,7 @@ export default function AppShell({
                 {showChildren && (
                   <div className="mt-1 space-y-1 border-l border-white/10 pl-3 ml-5">
                     {item.kids.map((child) => {
-                      const cActive =
-                        pathname === child.href ||
-                        pathname.startsWith(child.href + "/");
+                      const cActive = child.href === activeChildHref;
                       return (
                         <Link
                           key={child.href}
