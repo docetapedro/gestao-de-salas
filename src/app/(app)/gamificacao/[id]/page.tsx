@@ -85,6 +85,8 @@ type Evento = {
   ativo: boolean;
   equipas: Equipa[];
   dinamicas: Dinamica[];
+  // Participantes pré-cadastrados ainda sem equipa.
+  membros: Membro[];
 };
 type LinhaRanking = {
   equipaId: string;
@@ -179,6 +181,9 @@ export default function EventoPage({
           <TabsTrigger value="equipas">
             <Users /> Equipas
           </TabsTrigger>
+          <TabsTrigger value="participantes">
+            <UserPlus /> Participantes
+          </TabsTrigger>
           <TabsTrigger value="dinamicas">
             <Gamepad2 /> Dinâmicas
           </TabsTrigger>
@@ -192,6 +197,9 @@ export default function EventoPage({
 
         <TabsContent value="equipas">
           <EquipasTab evento={evento} onChange={carregar} />
+        </TabsContent>
+        <TabsContent value="participantes">
+          <ParticipantesTab evento={evento} onChange={carregar} />
         </TabsContent>
         <TabsContent value="dinamicas">
           <DinamicasTab evento={evento} onChange={carregar} />
@@ -488,6 +496,195 @@ function EquipaForm({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* =========================== Participantes ============================== */
+
+function ParticipantesTab({
+  evento,
+  onChange,
+}: {
+  evento: Evento;
+  onChange: () => void;
+}) {
+  const [texto, setTexto] = useState("");
+  const [adicionando, setAdicionando] = useState(false);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+
+  // Todos os participantes: os já em equipas + os que estão na "pool".
+  const participantes = useMemo(() => {
+    const atribuidos = evento.equipas.flatMap((eq) =>
+      eq.membros.map((m) => ({
+        id: m.id,
+        nome: m.nome,
+        equipaId: eq.id as string | null,
+      }))
+    );
+    const semEquipa = evento.membros.map((m) => ({
+      id: m.id,
+      nome: m.nome,
+      equipaId: null as string | null,
+    }));
+    return [...semEquipa, ...atribuidos].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt")
+    );
+  }, [evento.equipas, evento.membros]);
+
+  const totalSemEquipa = evento.membros.length;
+
+  async function adicionar() {
+    const nomes = texto
+      .split(/[\n,;]+/)
+      .map((n) => n.trim())
+      .filter(Boolean);
+    if (nomes.length === 0) return;
+    setAdicionando(true);
+    try {
+      await api("/api/gamificacao/membros", {
+        method: "POST",
+        body: JSON.stringify({ eventoId: evento.id, nomes }),
+      });
+      toast.success(
+        `${nomes.length} participante${nomes.length === 1 ? "" : "s"} adicionado${
+          nomes.length === 1 ? "" : "s"
+        }`
+      );
+      setTexto("");
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAdicionando(false);
+    }
+  }
+
+  async function associar(membroId: string, equipaId: string | null) {
+    setOcupado(membroId);
+    try {
+      await api(`/api/gamificacao/membros/${membroId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ equipaId }),
+      });
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function remover(membroId: string) {
+    setOcupado(membroId);
+    try {
+      await api(`/api/gamificacao/membros/${membroId}`, { method: "DELETE" });
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Pré-cadastro em lote */}
+      <Card>
+        <CardContent className="p-4">
+          <Label className="mb-1 block">Pré-cadastrar participantes</Label>
+          <p className="mb-2 text-xs text-slate-400">
+            Cola a lista de nomes (um por linha, ou separados por vírgula).
+            Podes associá-los às equipas depois.
+          </p>
+          <Textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            rows={4}
+            placeholder={"Ana Silva\nBruno Costa\nCarla Dias"}
+          />
+          <div className="mt-2 flex justify-end">
+            <Button
+              variant="navy"
+              size="sm"
+              onClick={adicionar}
+              disabled={adicionando || !texto.trim()}
+            >
+              <UserPlus className="h-4 w-4" />{" "}
+              {adicionando ? "A adicionar…" : "Adicionar à lista"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Lista com associação a equipas */}
+      {participantes.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center text-slate-400">
+            Ainda não há participantes. Cola a lista acima para começar.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between text-sm">
+              <span className="font-semibold text-slate-700">
+                {participantes.length} participante
+                {participantes.length === 1 ? "" : "s"}
+              </span>
+              {totalSemEquipa > 0 && (
+                <Badge variant="secondary" className="font-normal">
+                  {totalSemEquipa} sem equipa
+                </Badge>
+              )}
+            </div>
+
+            {evento.equipas.length === 0 && (
+              <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                Ainda não há equipas. Cria equipas na aba “Equipas” para poderes
+                associar os participantes.
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              {participantes.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate font-medium text-slate-700">
+                    {p.nome}
+                  </span>
+                  <select
+                    value={p.equipaId ?? ""}
+                    disabled={ocupado === p.id}
+                    onChange={(e) =>
+                      associar(p.id, e.target.value || null)
+                    }
+                    className="h-8 max-w-[45%] shrink-0 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-400 disabled:opacity-50"
+                  >
+                    <option value="">— Sem equipa —</option>
+                    {evento.equipas.map((eq) => (
+                      <option key={eq.id} value={eq.id}>
+                        {eq.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    title="Remover participante"
+                    disabled={ocupado === p.id}
+                    onClick={() => remover(p.id)}
+                    className="shrink-0 rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

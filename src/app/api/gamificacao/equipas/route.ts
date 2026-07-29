@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         lema: body.lema ? String(body.lema).trim() : null,
         ordem: (ultima?.ordem ?? -1) + 1,
         membros: membros.length
-          ? { create: membros.map((n) => ({ nome: n })) }
+          ? { create: membros.map((n) => ({ nome: n, eventoId })) }
           : undefined,
       },
       include: { membros: { orderBy: { nome: "asc" } } },

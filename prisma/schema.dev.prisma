@@ -344,6 +344,7 @@ model TeamBuildingEvento {
 
   equipas   Equipa[]
   dinamicas Dinamica[]
+  membros   EquipaMembro[]
 }
 
 // Equipa participante de um evento. A pontuação é sempre por equipa.
@@ -367,12 +368,17 @@ model Equipa {
 
 // Membro (nome) de uma equipa — opcional.
 model EquipaMembro {
-  id       String @id @default(cuid())
-  equipaId String
-  equipa   Equipa @relation(fields: [equipaId], references: [id], onDelete: Cascade)
+  id       String  @id @default(cuid())
+  // Participante do evento. Pode ser pré-cadastrado sem equipa (equipaId null)
+  // e associado a uma equipa mais tarde.
+  eventoId String?
+  evento   TeamBuildingEvento? @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  equipaId String?
+  equipa   Equipa? @relation(fields: [equipaId], references: [id], onDelete: Cascade)
   nome     String
 
   @@index([equipaId])
+  @@index([eventoId])
 }
 
 // Dinâmica / desafio dentro de um evento (ex.: "Caça ao tesouro").

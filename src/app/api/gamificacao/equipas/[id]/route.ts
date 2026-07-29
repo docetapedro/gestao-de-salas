@@ -47,10 +47,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
         },
       });
       if (substituirMembros) {
+        const eq = await tx.equipa.findUnique({
+          where: { id },
+          select: { eventoId: true },
+        });
         await tx.equipaMembro.deleteMany({ where: { equipaId: id } });
         if (membros.length) {
           await tx.equipaMembro.createMany({
-            data: membros.map((n) => ({ equipaId: id, nome: n })),
+            data: membros.map((n) => ({
+              equipaId: id,
+              eventoId: eq?.eventoId,
+              nome: n,
+            })),
           });
         }
       }

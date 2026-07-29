@@ -18,6 +18,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
           orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
           include: { membros: { orderBy: { nome: "asc" } } },
         },
+        // Participantes pré-cadastrados ainda sem equipa (a "pool").
+        membros: {
+          where: { equipaId: null },
+          orderBy: { nome: "asc" },
+        },
         dinamicas: {
           orderBy: [{ ordem: "asc" }, { createdAt: "asc" }],
           include: {
