@@ -65,11 +65,13 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Agenda", Icon: GridIcon, modulo: "agenda" },
   {
-    href: "/projetos",
-    label: "Projectos",
-    Icon: BriefcaseIcon,
-    modulo: "projetos",
-    children: [{ href: "/projetos/despesas", label: "Despesas e Custos" }],
+    label: "Gestão Administrativa",
+    Icon: BuildingIcon,
+    children: [
+      { href: "/eventos", label: "Eventos", modulo: "eventos" },
+      { href: "/salas", label: "Salas", modulo: "salas" },
+      { href: "/stock", label: "Gestão de Stock", modulo: "stock" },
+    ],
   },
   {
     label: "Gestão Pedagógica",
@@ -79,13 +81,11 @@ const NAV: NavItem[] = [
     ],
   },
   {
-    label: "Gestão Administrativa",
-    Icon: BuildingIcon,
-    children: [
-      { href: "/eventos", label: "Eventos", modulo: "eventos" },
-      { href: "/salas", label: "Salas", modulo: "salas" },
-      { href: "/stock", label: "Gestão de Stock", modulo: "stock" },
-    ],
+    href: "/projetos",
+    label: "Gestão de Projectos",
+    Icon: BriefcaseIcon,
+    modulo: "projetos",
+    children: [{ href: "/projetos/despesas", label: "Despesas e Custos" }],
   },
   {
     href: "/gamificacao",
