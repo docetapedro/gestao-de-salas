@@ -72,6 +72,7 @@ type Dinamica = {
   valorPorAcerto: number;
   bonusRapidezMax: number;
   tempoLimiteSeg: number | null;
+  quizFechaEm: string | null;
   classificacoes: Classificacao[];
   perguntas: QuizPergunta[];
   submissoes: QuizSubmissao[];
@@ -949,6 +950,11 @@ function QuizControloModal({
   onChange: () => void;
 }) {
   const [aberto, setAberto] = useState(dinamica.quizAberto);
+  // Instante de fecho automático (epoch ms) para mostrar a contagem no admin.
+  const [fechaEm, setFechaEm] = useState<number | null>(
+    dinamica.quizFechaEm ? new Date(dinamica.quizFechaEm).getTime() : null
+  );
+  const [, setTick] = useState(0);
   const [qr, setQr] = useState<string>("");
   const [projetar, setProjetar] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -1010,6 +1016,16 @@ function QuizControloModal({
     return () => clearInterval(t);
   }, [carregarSubs]);
 
+  // Contagem decrescente enquanto houver fecho agendado no futuro.
+  useEffect(() => {
+    if (fechaEm == null) return;
+    const t = setInterval(() => setTick((x) => x + 1), 500);
+    return () => clearInterval(t);
+  }, [fechaEm]);
+
+  const segRestantes =
+    fechaEm != null ? Math.max(0, Math.ceil((fechaEm - Date.now()) / 1000)) : null;
+
   async function toggleAberto() {
     const novo = !aberto;
     setBusy(true);
@@ -1019,6 +1035,13 @@ function QuizControloModal({
         body: JSON.stringify({ quizAberto: novo }),
       });
       setAberto(novo);
+      // Espelha a lógica do servidor: ao abrir, fecha ao fim de tempoLimiteSeg;
+      // ao fechar, limpa. (O servidor é a fonte da verdade para as submissões.)
+      setFechaEm(
+        novo && dinamica.tempoLimiteSeg && dinamica.tempoLimiteSeg > 0
+          ? Date.now() + dinamica.tempoLimiteSeg * 1000
+          : null
+      );
       toast.success(novo ? "Quiz aberto a respostas" : "Quiz fechado");
       onChange();
     } catch (e) {
@@ -1138,12 +1161,26 @@ function QuizControloModal({
         <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
           <div>
             <p className="text-sm font-semibold text-navy">
-              {aberto ? "Aberto a respostas" : "Fechado"}
-            </p>
-            <p className="text-xs text-slate-400">
               {aberto
-                ? "Os membros já podem responder."
-                : "Abre quando quiseres começar."}
+                ? segRestantes != null && segRestantes <= 0
+                  ? "Tempo esgotado"
+                  : "Aberto a respostas"
+                : "Fechado"}
+            </p>
+            <p
+              className={`text-xs ${
+                aberto && segRestantes != null && segRestantes <= 5
+                  ? "font-semibold text-red-500"
+                  : "text-slate-400"
+              }`}
+            >
+              {!aberto
+                ? "Abre quando quiseres começar."
+                : segRestantes == null
+                  ? "Os membros já podem responder (sem limite de tempo)."
+                  : segRestantes > 0
+                    ? `Fecha automaticamente em ${segRestantes}s.`
+                    : "Já ninguém pode submeter respostas."}
             </p>
           </div>
           <Button
@@ -1655,7 +1692,9 @@ function DinamicaForm({
             <p className="-mt-2 text-xs text-slate-400">
               Pontos = acertos × pontos/acerto + bónus (só com limite de tempo:
               quanto mais rápido e certo, maior o bónus). A pontuação da equipa é
-              a soma dos membros.
+              a soma dos membros. O <strong>Tempo (s)</strong> também define a
+              duração do quiz: a partir do momento em que o abres, fecha
+              automaticamente ao fim desses segundos e ninguém mais submete.
             </p>
 
             {/* Perguntas */}

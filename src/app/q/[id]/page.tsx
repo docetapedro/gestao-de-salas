@@ -18,6 +18,8 @@ type Quiz = {
   descricao: string | null;
   aberto: boolean;
   tempoLimiteSeg: number | null;
+  // Instante de fecho automático (ISO) ou null se não houver.
+  fechaEm: string | null;
   evento: { nome: string; local: string | null } | null;
   perguntas: Pergunta[];
 };
@@ -38,6 +40,10 @@ export default function QuizPublicoPage({
   const [equipas, setEquipas] = useState<Equipa[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  // Instante de fecho (epoch ms no relógio do cliente, já corrigido do desvio
+  // face ao servidor). null = sem fecho automático.
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [, setTick] = useState(0);
 
   const [fase, setFase] = useState<Fase>("intro");
   const [equipaId, setEquipaId] = useState("");
@@ -56,11 +62,18 @@ export default function QuizPublicoPage({
 
   const carregar = useCallback(async () => {
     try {
-      const d = await api<{ quiz: Quiz; equipas: Equipa[] }>(
+      const d = await api<{ agora: string; quiz: Quiz; equipas: Equipa[] }>(
         `/api/public/quiz/${id}`
       );
       setQuiz(d.quiz);
       setEquipas(d.equipas);
+      if (d.quiz.fechaEm) {
+        // Corrige o desvio de relógio: offset = servidor − cliente.
+        const offset = Date.parse(d.agora) - Date.now();
+        setDeadline(Date.parse(d.quiz.fechaEm) - offset);
+      } else {
+        setDeadline(null);
+      }
     } catch (e) {
       setErro((e as Error).message);
     } finally {
@@ -71,6 +84,15 @@ export default function QuizPublicoPage({
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Relógio para reavaliar o "tempo esgotado" no ecrã de introdução.
+  useEffect(() => {
+    if (deadline == null) return;
+    const t = setInterval(() => setTick((x) => x + 1), 500);
+    return () => clearInterval(t);
+  }, [deadline]);
+
+  const expirado = deadline != null && Date.now() > deadline;
 
   const submeter = useCallback(async () => {
     if (!quiz || enviando) return;
@@ -139,21 +161,24 @@ export default function QuizPublicoPage({
     );
   }
 
-  if (quiz && !quiz.aberto && fase === "intro") {
+  if (quiz && (!quiz.aberto || expirado) && fase === "intro") {
     return (
       <Centro>
         <Clock className="h-12 w-12 text-slate-300" />
         <h1 className="text-xl font-bold text-navy">{quiz.nome}</h1>
         <p className="text-center text-slate-500">
-          O questionário ainda não está aberto. Aguarda a indicação do
-          organizador e volta a ler o QR Code.
+          {expirado
+            ? "O tempo do questionário terminou. Já não é possível responder."
+            : "O questionário ainda não está aberto. Aguarda a indicação do organizador e volta a ler o QR Code."}
         </p>
-        <button
-          onClick={carregar}
-          className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white transition hover:bg-brand-700"
-        >
-          Tentar de novo
-        </button>
+        {!expirado && (
+          <button
+            onClick={carregar}
+            className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white transition hover:bg-brand-700"
+          >
+            Tentar de novo
+          </button>
+        )}
       </Centro>
     );
   }
@@ -292,10 +317,11 @@ export default function QuizPublicoPage({
             <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-sm text-amber-700">
               Este quiz ainda não tem perguntas. Avisa o organizador.
             </p>
-          ) : quiz?.tempoLimiteSeg ? (
+          ) : deadline != null ? (
             <p className="mb-3 flex items-center justify-center gap-1.5 text-sm text-slate-500">
-              <Clock className="h-4 w-4" /> Tens {quiz.tempoLimiteSeg}s — quanto
-              mais rápido e certo, mais pontos!
+              <Clock className="h-4 w-4" /> Fecha em{" "}
+              {Math.max(0, Math.ceil((deadline - Date.now()) / 1000))}s — responde
+              rápido e certo para mais pontos!
             </p>
           ) : (
             <p className="mb-3 text-center text-sm text-slate-500">
@@ -304,7 +330,9 @@ export default function QuizPublicoPage({
           )}
           <button
             onClick={comecar}
-            disabled={!equipaId || !nome.trim() || perguntas.length === 0}
+            disabled={
+              !equipaId || !nome.trim() || perguntas.length === 0 || expirado
+            }
             className="h-12 w-full rounded-xl bg-brand-600 text-base font-bold text-white transition hover:bg-brand-700 disabled:opacity-40"
           >
             Começar
@@ -318,12 +346,11 @@ export default function QuizPublicoPage({
 
   return (
     <QuizCorrida
-      quiz={quiz!}
       atual={atual}
       idx={idx}
       total={perguntas.length}
       escolhida={atual ? respostas[atual.id] : undefined}
-      inicioRef={inicioRef}
+      deadline={deadline}
       enviando={enviando}
       ultima={ultima}
       onEscolher={escolher}
@@ -337,12 +364,11 @@ export default function QuizPublicoPage({
 /* ============================ Ecrã da corrida =========================== */
 
 function QuizCorrida({
-  quiz,
   atual,
   idx,
   total,
   escolhida,
-  inicioRef,
+  deadline,
   enviando,
   ultima,
   onEscolher,
@@ -350,12 +376,11 @@ function QuizCorrida({
   onSubmeter,
   onTempoEsgotado,
 }: {
-  quiz: Quiz;
   atual: Pergunta | undefined;
   idx: number;
   total: number;
   escolhida: string | undefined;
-  inicioRef: React.MutableRefObject<number>;
+  deadline: number | null;
   enviando: boolean;
   ultima: boolean;
   onEscolher: (perguntaId: string, opcaoId: string) => void;
@@ -363,15 +388,16 @@ function QuizCorrida({
   onSubmeter: () => void;
   onTempoEsgotado: () => void;
 }) {
-  const limite = quiz.tempoLimiteSeg ?? 0;
-  const [restante, setRestante] = useState(limite);
+  // Contagem GLOBAL até ao instante de fecho do quiz (igual para todos).
+  const [restante, setRestante] = useState(
+    deadline != null ? Math.max(0, (deadline - Date.now()) / 1000) : 0
+  );
   const esgotouRef = useRef(false);
 
   useEffect(() => {
-    if (!limite) return;
+    if (deadline == null) return;
     const t = setInterval(() => {
-      const passou = (Date.now() - inicioRef.current) / 1000;
-      const r = Math.max(0, limite - passou);
+      const r = Math.max(0, (deadline - Date.now()) / 1000);
       setRestante(r);
       if (r <= 0 && !esgotouRef.current) {
         esgotouRef.current = true;
@@ -380,8 +406,9 @@ function QuizCorrida({
       }
     }, 200);
     return () => clearInterval(t);
-  }, [limite, inicioRef, onTempoEsgotado]);
+  }, [deadline, onTempoEsgotado]);
 
+  const limite = deadline != null ? 1 : 0; // controla a exibição do relógio
   const pct = useMemo(
     () => (total ? ((idx + 1) / total) * 100 : 0),
     [idx, total]
