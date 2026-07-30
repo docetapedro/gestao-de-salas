@@ -208,7 +208,7 @@ export default function EventoPage({
           <PontosTab evento={evento} onSaved={carregar} />
         </TabsContent>
         <TabsContent value="ranking">
-          <RankingTab eventoId={id} ranking={ranking} />
+          <RankingTab eventoId={id} ranking={ranking} onChange={carregar} />
         </TabsContent>
       </Tabs>
     </div>
@@ -1856,11 +1856,37 @@ function PontosTab({
 function RankingTab({
   eventoId,
   ranking,
+  onChange,
 }: {
   eventoId: string;
   ranking: LinhaRanking[];
+  onChange: () => void;
 }) {
+  const [repor, setRepor] = useState(false);
+  const [busy, setBusy] = useState(false);
   const max = Math.max(1, ...ranking.map((r) => r.total));
+  const temPontos = ranking.some((r) => r.total !== 0);
+
+  async function reporRanking() {
+    setBusy(true);
+    try {
+      const r = await api<{
+        respostasApagadas: number;
+        classificacoesApagadas: number;
+      }>(`/api/gamificacao/eventos/${eventoId}/repor-ranking`, {
+        method: "POST",
+      });
+      toast.success(
+        `Ranking reposto (${r.classificacoesApagadas} pontuações e ${r.respostasApagadas} respostas apagadas)`
+      );
+      setRepor(false);
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (ranking.length === 0) {
     return (
@@ -1874,13 +1900,34 @@ function RankingTab({
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap justify-end gap-2">
+        {temPontos && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-red-600 hover:text-red-700"
+            onClick={() => setRepor(true)}
+          >
+            <Trash2 /> Repor ranking
+          </Button>
+        )}
         <Button asChild variant="outline" size="sm">
           <Link href={`/gamificacao/${eventoId}/ranking`}>
             <Trophy /> Ver em ecrã cheio
           </Link>
         </Button>
       </div>
+      {repor && (
+        <ConfirmDialog
+          title="Repor ranking do evento?"
+          message="Vais apagar TODAS as pontuações (lançadas à mão e de quiz) e TODAS as respostas de TODAS as dinâmicas deste evento. O ranking fica a zero. Esta acção não pode ser anulada."
+          confirmLabel="Repor ranking"
+          danger
+          busy={busy}
+          onConfirm={reporRanking}
+          onCancel={() => setRepor(false)}
+        />
+      )}
       <Card>
         <CardContent className="space-y-2 p-4">
           {ranking.map((r) => (

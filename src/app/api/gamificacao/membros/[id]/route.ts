@@ -61,7 +61,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     assertCan(await getSession(), "gamificacao", "manage");
     const { id } = await params;
-    await prisma.equipaMembro.delete({ where: { id } });
+    // Idempotente: eliminações rápidas/repetidas (duplo-clique) não devem falhar
+    // com P2025 se o registo já tiver sido apagado. deleteMany devolve count 0.
+    await prisma.equipaMembro.deleteMany({ where: { id } });
     return json({ ok: true });
   } catch (err) {
     return handleError(err);
