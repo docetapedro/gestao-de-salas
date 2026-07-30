@@ -44,17 +44,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
 
     return json({
-      // `agora` (relógio do servidor) permite ao cliente corrigir o desvio de
-      // relógio ao calcular o tempo restante até `fechaEm`.
-      agora: new Date().toISOString(),
       quiz: {
         id: dinamica.id,
         nome: dinamica.nome,
         descricao: dinamica.descricao,
         aberto: dinamica.quizAberto,
+        // Segundos por pergunta (o cliente reinicia o cronómetro a cada uma).
         tempoLimiteSeg: dinamica.tempoLimiteSeg,
-        // Instante de fecho automático (ISO) ou null se não houver.
-        fechaEm: dinamica.quizFechaEm ? dinamica.quizFechaEm.toISOString() : null,
         evento: dinamica.evento,
         perguntas: dinamica.perguntas.map((p) => ({
           id: p.id,

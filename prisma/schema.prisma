@@ -400,11 +400,7 @@ model Dinamica {
   quizAberto      Boolean @default(false) // aceita respostas neste momento
   valorPorAcerto  Float   @default(10) // pontos por pergunta certa
   bonusRapidezMax Float   @default(20) // bónus máximo de rapidez por membro (0 = sem bónus)
-  tempoLimiteSeg  Int? // limite de tempo (s) para o bónus de rapidez; null = sem bónus de tempo
-  // Instante em que o quiz fecha automaticamente. Definido ao abrir = agora +
-  // tempoLimiteSeg. Depois deste instante o servidor recusa submissões. null =
-  // sem fecho automático (fecha só quando o organizador fecha à mão).
-  quizFechaEm     DateTime?
+  tempoLimiteSeg  Int? // segundos por pergunta (também usado no bónus de rapidez); null = sem limite
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 

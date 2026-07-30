@@ -41,18 +41,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!dinamica.quizAberto) {
       return json({ error: "Este questionário está fechado" }, 403);
     }
-    // Fecho automático por tempo: depois do instante `quizFechaEm` ninguém
-    // submete, mesmo que o quiz ainda esteja marcado como aberto. Damos uma
-    // pequena margem (GRACE) para o auto-submeter que dispara no fim: o pedido
-    // é enviado no instante do fecho e a latência de rede fá-lo chegar já
-    // depois — sem margem, essas respostas legítimas seriam rejeitadas.
-    const GRACE_MS = 5000;
-    if (
-      dinamica.quizFechaEm &&
-      Date.now() > dinamica.quizFechaEm.getTime() + GRACE_MS
-    ) {
-      return json({ error: "O tempo do questionário terminou." }, 403);
-    }
 
     const equipa = await prisma.equipa.findFirst({
       where: { id: equipaId, eventoId: dinamica.eventoId },
@@ -94,10 +82,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (correta && escolhida === correta.id) certas += 1;
     }
 
+    // `tempoLimiteSeg` é por PERGUNTA; o `tempoMs` medido é o total do quiz.
+    // Para o bónus de rapidez, o tempo disponível é o limite × nº de perguntas.
+    const limiteTotalSeg =
+      dinamica.tempoLimiteSeg != null
+        ? dinamica.tempoLimiteSeg * totalPerguntas
+        : null;
     const pontos = pontuarSubmissao(certas, totalPerguntas, tempoMs, {
       valorPorAcerto: dinamica.valorPorAcerto,
       bonusRapidezMax: dinamica.bonusRapidezMax,
-      tempoLimiteSeg: dinamica.tempoLimiteSeg,
+      tempoLimiteSeg: limiteTotalSeg,
     });
 
     await prisma.quizSubmissao.create({

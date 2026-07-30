@@ -26,29 +26,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
       body.tempoLimiteSeg !== undefined;
     const cfg = temConfigQuiz ? lerConfigQuiz(body) : undefined;
 
-    // Ao ABRIR o quiz, arranca a contagem global: fecha automaticamente ao fim
-    // de `tempoLimiteSeg` segundos. Ao FECHAR, limpa o instante de fecho.
-    let quizFechaEm: Date | null | undefined = undefined;
-    if (body.quizAberto !== undefined) {
-      if (Boolean(body.quizAberto)) {
-        // Tempo-limite efetivo: o que vier no body (guardar config) ou o atual.
-        let limite: number | null | undefined = cfg?.tempoLimiteSeg;
-        if (limite === undefined) {
-          const atual = await prisma.dinamica.findUnique({
-            where: { id },
-            select: { tempoLimiteSeg: true },
-          });
-          limite = atual?.tempoLimiteSeg ?? null;
-        }
-        quizFechaEm =
-          limite && limite > 0
-            ? new Date(Date.now() + limite * 1000)
-            : null;
-      } else {
-        quizFechaEm = null;
-      }
-    }
-
     const dinamica = await prisma.dinamica.update({
       where: { id },
       data: {
@@ -70,7 +47,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
             : undefined,
         quizAberto:
           body.quizAberto !== undefined ? Boolean(body.quizAberto) : undefined,
-        quizFechaEm,
         ...(cfg ?? {}),
       },
     });
