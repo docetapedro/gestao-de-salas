@@ -62,3 +62,34 @@ export async function POST(req: NextRequest) {
     return handleError(err);
   }
 }
+
+/**
+ * Elimina participantes em lote.
+ * Body: { eventoId, ids: string[] } — só apaga membros que pertençam ao evento
+ * indicado (segurança). Idempotente: ids já inexistentes são ignorados.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    assertCan(await getSession(), "gamificacao", "manage");
+    const body = await req.json();
+    const eventoId = String(body.eventoId || "").trim();
+    if (!eventoId) return json({ error: "Evento é obrigatório" }, 400);
+
+    const ids = (Array.isArray(body.ids) ? body.ids : [])
+      .map((v: unknown) => String(v || "").trim())
+      .filter(Boolean);
+    if (ids.length === 0) return json({ error: "Nenhum participante indicado" }, 400);
+
+    // Membros de um evento estão ou na pool (eventoId) ou numa equipa do evento
+    // (equipa.eventoId). Cobrimos ambos os casos no filtro.
+    const res = await prisma.equipaMembro.deleteMany({
+      where: {
+        id: { in: ids },
+        OR: [{ eventoId }, { equipa: { eventoId } }],
+      },
+    });
+    return json({ ok: true, apagados: res.count });
+  } catch (err) {
+    return handleError(err);
+  }
+}

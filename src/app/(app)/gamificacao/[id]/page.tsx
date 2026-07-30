@@ -511,6 +511,9 @@ function ParticipantesTab({
   const [texto, setTexto] = useState("");
   const [adicionando, setAdicionando] = useState(false);
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [confirmarLote, setConfirmarLote] = useState(false);
+  const [eliminandoLote, setEliminandoLote] = useState(false);
 
   // Todos os participantes: os já em equipas + os que estão na "pool".
   const participantes = useMemo(() => {
@@ -532,6 +535,30 @@ function ParticipantesTab({
   }, [evento.equipas, evento.membros]);
 
   const totalSemEquipa = evento.membros.length;
+
+  // Selecção múltipla (para eliminar em lote). Só conta ids ainda existentes.
+  const idsSelecionados = useMemo(
+    () => participantes.map((p) => p.id).filter((id) => selecionados.has(id)),
+    [participantes, selecionados]
+  );
+  const nSelecionados = idsSelecionados.length;
+  const todosSelecionados =
+    participantes.length > 0 && nSelecionados === participantes.length;
+
+  function alternarUm(id: string) {
+    setSelecionados((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  }
+
+  function alternarTodos() {
+    setSelecionados(
+      todosSelecionados ? new Set() : new Set(participantes.map((p) => p.id))
+    );
+  }
 
   async function adicionar() {
     const nomes = texto
@@ -586,6 +613,29 @@ function ParticipantesTab({
     }
   }
 
+  async function eliminarSelecionados() {
+    if (nSelecionados === 0) return;
+    setEliminandoLote(true);
+    try {
+      const r = await api<{ apagados: number }>("/api/gamificacao/membros", {
+        method: "DELETE",
+        body: JSON.stringify({ eventoId: evento.id, ids: idsSelecionados }),
+      });
+      toast.success(
+        `${r.apagados} participante${r.apagados === 1 ? "" : "s"} eliminado${
+          r.apagados === 1 ? "" : "s"
+        }`
+      );
+      setSelecionados(new Set());
+      setConfirmarLote(false);
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setEliminandoLote(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Pré-cadastro em lote */}
@@ -626,16 +676,38 @@ function ParticipantesTab({
       ) : (
         <Card>
           <CardContent className="p-4">
-            <div className="mb-3 flex items-center justify-between text-sm">
-              <span className="font-semibold text-slate-700">
-                {participantes.length} participante
-                {participantes.length === 1 ? "" : "s"}
-              </span>
-              {totalSemEquipa > 0 && (
-                <Badge variant="secondary" className="font-normal">
-                  {totalSemEquipa} sem equipa
-                </Badge>
-              )}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-700">
+                  {participantes.length} participante
+                  {participantes.length === 1 ? "" : "s"}
+                </span>
+                {totalSemEquipa > 0 && (
+                  <Badge variant="secondary" className="font-normal">
+                    {totalSemEquipa} sem equipa
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={alternarTodos}
+                  disabled={participantes.length === 0}
+                >
+                  {todosSelecionados ? "Desmarcar todos" : "Selecionar todos"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 disabled:text-slate-300"
+                  onClick={() => setConfirmarLote(true)}
+                  disabled={nSelecionados === 0}
+                >
+                  <Trash2 /> Eliminar
+                  {nSelecionados > 0 ? ` (${nSelecionados})` : ""}
+                </Button>
+              </div>
             </div>
 
             {evento.equipas.length === 0 && (
@@ -649,8 +721,17 @@ function ParticipantesTab({
               {participantes.map((p) => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                    selecionados.has(p.id) ? "bg-red-50" : "bg-slate-50"
+                  }`}
                 >
+                  <input
+                    type="checkbox"
+                    checked={selecionados.has(p.id)}
+                    onChange={() => alternarUm(p.id)}
+                    className="h-4 w-4 shrink-0 cursor-pointer accent-red-600"
+                    title="Selecionar para eliminar"
+                  />
                   <span className="min-w-0 flex-1 truncate font-medium text-slate-700">
                     {p.nome}
                   </span>
@@ -683,6 +764,20 @@ function ParticipantesTab({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {confirmarLote && (
+        <ConfirmDialog
+          title="Eliminar participantes selecionados?"
+          message={`Vais eliminar ${nSelecionados} participante${
+            nSelecionados === 1 ? "" : "s"
+          } deste evento. Esta acção não pode ser anulada.`}
+          confirmLabel="Eliminar"
+          danger
+          busy={eliminandoLote}
+          onConfirm={eliminarSelecionados}
+          onCancel={() => setConfirmarLote(false)}
+        />
       )}
     </div>
   );
