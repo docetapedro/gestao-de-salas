@@ -1778,11 +1778,25 @@ function PontosTab({
   evento: Evento;
   onSaved: () => void;
 }) {
-  // Só dinâmicas manuais — as de quiz são pontuadas automaticamente.
+  // Todas as dinâmicas aparecem na grelha. As manuais são editáveis; as de quiz
+  // entram só para leitura (pontuadas automaticamente pelas respostas), para se
+  // ver o contributo delas no total por equipa.
+  const todas = useMemo(() => evento.dinamicas, [evento]);
   const manuais = useMemo(
-    () => evento.dinamicas.filter((d) => d.tipo !== "quiz"),
-    [evento]
+    () => todas.filter((d) => d.tipo !== "quiz"),
+    [todas]
   );
+  // Pontos de quiz por célula (dinâmica+equipa), da Classificacao já calculada.
+  const quizPts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const d of todas) {
+      if (d.tipo !== "quiz") continue;
+      for (const c of d.classificacoes) {
+        map[cellKey(d.id, c.equipaId)] = c.pontos;
+      }
+    }
+    return map;
+  }, [todas]);
 
   // Valor original (do servidor) por célula.
   const original = useMemo(() => {
@@ -1811,14 +1825,16 @@ function PontosTab({
   const totais = useMemo(() => {
     const t: Record<string, number> = {};
     for (const eq of evento.equipas) t[eq.id] = 0;
-    for (const d of manuais) {
+    for (const d of todas) {
+      const ehQuiz = d.tipo === "quiz";
       for (const eq of evento.equipas) {
-        const v = Number(grid[cellKey(d.id, eq.id)] ?? 0) || 0;
+        const k = cellKey(d.id, eq.id);
+        const v = ehQuiz ? quizPts[k] ?? 0 : Number(grid[k] ?? 0) || 0;
         t[eq.id] += v * (d.peso ?? 1);
       }
     }
     return t;
-  }, [grid, evento.equipas, manuais]);
+  }, [grid, evento.equipas, todas, quizPts]);
 
   async function salvar() {
     const lancamentos: { dinamicaId: string; equipaId: string; pontos: number }[] =
@@ -1851,13 +1867,11 @@ function PontosTab({
     }
   }
 
-  if (evento.equipas.length === 0 || manuais.length === 0) {
+  if (evento.equipas.length === 0 || todas.length === 0) {
     return (
       <Card>
         <CardContent className="p-10 text-center text-slate-400">
-          {evento.equipas.length === 0
-            ? "Cria pelo menos uma equipa e uma dinâmica para lançar pontuações."
-            : "Não há dinâmicas manuais. As dinâmicas de quiz são pontuadas automaticamente pelas respostas."}
+          Cria pelo menos uma equipa e uma dinâmica para lançar pontuações.
         </CardContent>
       </Card>
     );
@@ -1867,8 +1881,9 @@ function PontosTab({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Lança a pontuação de cada equipa em cada dinâmica. A posição sai
-          automaticamente do total.
+          Lança a pontuação de cada equipa nas dinâmicas manuais. As de quiz (a
+          cinzento) são automáticas e já contam para o total. A posição sai do
+          total.
         </p>
         <Button variant="navy" onClick={salvar} disabled={!dirty || saving}>
           <Save /> {saving ? "Guardando…" : "Guardar pontuações"}
@@ -1899,35 +1914,63 @@ function PontosTab({
               </tr>
             </thead>
             <tbody>
-              {manuais.map((d) => (
-                <tr key={d.id} className="border-t border-slate-100">
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2">
-                    <div className="font-medium text-slate-700">{d.nome}</div>
-                    {d.peso !== 1 && (
-                      <div className="text-xs text-slate-400">
-                        multiplicador ×{nf(d.peso)}
+              {todas.map((d) => {
+                const ehQuiz = d.tipo === "quiz";
+                return (
+                  <tr key={d.id} className="border-t border-slate-100">
+                    <td className="sticky left-0 z-10 bg-white px-3 py-2">
+                      <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                        {d.nome}
+                        {ehQuiz && (
+                          <Badge variant="secondary" className="font-normal">
+                            <QrCode className="mr-1 h-3 w-3" /> quiz
+                          </Badge>
+                        )}
                       </div>
-                    )}
-                  </td>
-                  {evento.equipas.map((eq) => {
-                    const k = cellKey(d.id, eq.id);
-                    return (
-                      <td key={eq.id} className="px-2 py-1.5 text-center">
-                        <input
-                          type="number"
-                          step="any"
-                          value={grid[k] ?? ""}
-                          onChange={(e) =>
-                            setGrid((g) => ({ ...g, [k]: e.target.value }))
-                          }
-                          placeholder="0"
-                          className="h-9 w-20 rounded-md border border-slate-200 bg-white text-center text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                      {ehQuiz ? (
+                        <div className="text-xs text-slate-400">
+                          automático (pelas respostas)
+                          {d.peso !== 1 ? ` · ×${nf(d.peso)}` : ""}
+                        </div>
+                      ) : (
+                        d.peso !== 1 && (
+                          <div className="text-xs text-slate-400">
+                            multiplicador ×{nf(d.peso)}
+                          </div>
+                        )
+                      )}
+                    </td>
+                    {evento.equipas.map((eq) => {
+                      const k = cellKey(d.id, eq.id);
+                      return (
+                        <td key={eq.id} className="px-2 py-1.5 text-center">
+                          {ehQuiz ? (
+                            <input
+                              type="text"
+                              value={nf(quizPts[k] ?? 0)}
+                              readOnly
+                              disabled
+                              title="Pontuação automática do quiz (não editável)"
+                              className="h-9 w-20 cursor-not-allowed rounded-md border border-slate-100 bg-slate-50 text-center text-slate-400"
+                            />
+                          ) : (
+                            <input
+                              type="number"
+                              step="any"
+                              value={grid[k] ?? ""}
+                              onChange={(e) =>
+                                setGrid((g) => ({ ...g, [k]: e.target.value }))
+                              }
+                              placeholder="0"
+                              className="h-9 w-20 rounded-md border border-slate-200 bg-white text-center text-slate-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-200 bg-slate-50">
