@@ -32,6 +32,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
               include: { opcoes: { orderBy: { ordem: "asc" } } },
             },
             submissoes: { orderBy: { createdAt: "desc" } },
+            votos: true,
           },
         },
       },

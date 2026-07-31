@@ -173,3 +173,86 @@ export async function recomputarClassificacaoQuiz(
     }
   }
 }
+
+// ===========================================================================
+// Grito de Guerra (votação)
+// Cada equipa vota uma vez noutra equipa; vence a mais votada. SÓ o vencedor
+// pontua: pontos = nº de votos recebidos × `valorPorVoto`. Havendo empate no
+// número máximo de votos, não há vencedor (ninguém pontua).
+// ===========================================================================
+
+export type ApuramentoGrito = {
+  // Votos recebidos por equipa (só as que receberam ≥1 voto).
+  contagem: { equipaId: string; votos: number }[];
+  // Equipa vencedora (única com o máximo de votos) ou null (empate / sem votos).
+  vencedorEquipaId: string | null;
+  maxVotos: number;
+  empate: boolean;
+};
+
+/** Apura os votos de um grito: contagem por equipa e vencedor (ou empate). */
+export function apurarGrito(
+  votos: { votadaEquipaId: string }[]
+): ApuramentoGrito {
+  const mapa = new Map<string, number>();
+  for (const v of votos) {
+    mapa.set(v.votadaEquipaId, (mapa.get(v.votadaEquipaId) ?? 0) + 1);
+  }
+  const contagem = [...mapa.entries()].map(([equipaId, votos]) => ({
+    equipaId,
+    votos,
+  }));
+
+  let maxVotos = 0;
+  for (const c of contagem) if (c.votos > maxVotos) maxVotos = c.votos;
+  const noTopo = contagem.filter((c) => c.votos === maxVotos && maxVotos > 0);
+  const empate = noTopo.length > 1;
+  const vencedorEquipaId = maxVotos > 0 && !empate ? noTopo[0].equipaId : null;
+
+  return { contagem, vencedorEquipaId, maxVotos, empate };
+}
+
+/**
+ * Recalcula a Classificacao de um grito. Como só o vencedor pontua, limpa todas
+ * as classificações da dinâmica e, havendo vencedor único, grava-lhe
+ * `maxVotos × valorPorVoto`. Deve ser chamado após cada voto (ou remoção).
+ * Devolve o apuramento actual.
+ */
+export async function recomputarClassificacaoGrito(
+  dinamicaId: string
+): Promise<ApuramentoGrito> {
+  const [votos, dinamica] = await Promise.all([
+    prisma.gritoVoto.findMany({
+      where: { dinamicaId },
+      select: { votadaEquipaId: true },
+    }),
+    prisma.dinamica.findUnique({
+      where: { id: dinamicaId },
+      select: { valorPorVoto: true },
+    }),
+  ]);
+
+  const apuramento = apurarGrito(votos);
+  const valorPorVoto = dinamica?.valorPorVoto ?? 10;
+
+  // Só o vencedor pontua: apaga todas as classificações da dinâmica e, havendo
+  // vencedor único, grava-lhe os pontos (nº de votos × valorPorVoto).
+  const opVencedor = apuramento.vencedorEquipaId
+    ? [
+        prisma.classificacao.create({
+          data: {
+            dinamicaId,
+            equipaId: apuramento.vencedorEquipaId,
+            pontos: Math.round(apuramento.maxVotos * valorPorVoto * 100) / 100,
+          },
+        }),
+      ]
+    : [];
+
+  await prisma.$transaction([
+    prisma.classificacao.deleteMany({ where: { dinamicaId } }),
+    ...opVencedor,
+  ]);
+
+  return apuramento;
+}

@@ -20,8 +20,15 @@ export async function POST(req: NextRequest) {
       select: { ordem: true },
     });
     const peso = Number(body.peso);
-    const tipo = body.tipo === "quiz" ? "quiz" : "manual";
+    const tipo =
+      body.tipo === "quiz"
+        ? "quiz"
+        : body.tipo === "grito"
+          ? "grito"
+          : "manual";
     const cfg = lerConfigQuiz(body);
+    const vpv = Number(body.valorPorVoto);
+    const valorPorVoto = Number.isFinite(vpv) && vpv >= 0 ? vpv : 10;
 
     const dinamica = await prisma.dinamica.create({
       data: {
@@ -32,6 +39,7 @@ export async function POST(req: NextRequest) {
         ordem: (ultima?.ordem ?? -1) + 1,
         tipo,
         ...cfg,
+        valorPorVoto,
       },
     });
 

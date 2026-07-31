@@ -23,6 +23,7 @@ import {
   ListChecks,
   Maximize,
   Medal,
+  Megaphone,
   Pencil,
   Plus,
   QrCode,
@@ -63,20 +64,27 @@ type QuizSubmissao = {
   totalPerguntas: number;
   pontos: number;
 };
+type GritoVoto = {
+  id: string;
+  votanteEquipaId: string;
+  votadaEquipaId: string;
+};
 type Dinamica = {
   id: string;
   nome: string;
   descricao: string | null;
   peso: number;
   ordem: number;
-  tipo: string; // "manual" | "quiz"
+  tipo: string; // "manual" | "quiz" | "grito"
   quizAberto: boolean;
   valorPorAcerto: number;
   bonusRapidezMax: number;
   tempoLimiteSeg: number | null;
+  valorPorVoto: number;
   classificacoes: Classificacao[];
   perguntas: QuizPergunta[];
   submissoes: QuizSubmissao[];
+  votos: GritoVoto[];
 };
 type Evento = {
   id: string;
@@ -925,6 +933,16 @@ function DinamicasTab({
                         <Radio className="h-3 w-3" /> Aberto
                       </Badge>
                     )}
+                    {d.tipo === "grito" && (
+                      <Badge className="gap-1 bg-purple-100 text-purple-700 hover:bg-purple-100">
+                        <Megaphone className="h-3 w-3" /> Grito de Guerra
+                      </Badge>
+                    )}
+                    {d.tipo === "grito" && d.quizAberto && (
+                      <Badge className="gap-1 bg-green-100 text-green-700 hover:bg-green-100">
+                        <Radio className="h-3 w-3" /> Aberto
+                      </Badge>
+                    )}
                   </div>
                   {d.descricao && (
                     <p className="truncate text-sm text-slate-500">
@@ -939,10 +957,16 @@ function DinamicasTab({
                       {d.submissoes.length === 1 ? "" : "s"}
                     </p>
                   )}
+                  {d.tipo === "grito" && (
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {d.votos.length} voto{d.votos.length === 1 ? "" : "s"} ·{" "}
+                      {nf(d.valorPorVoto)} pt/voto ao vencedor
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
-                  {/* QR/controlo sempre visível para quizzes */}
-                  {d.tipo === "quiz" && (
+                  {/* QR/controlo sempre visível para quizzes e gritos */}
+                  {(d.tipo === "quiz" || d.tipo === "grito") && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -999,7 +1023,14 @@ function DinamicasTab({
           onCancel={() => setRemover(null)}
         />
       )}
-      {controlo && (
+      {controlo && controlo.tipo === "grito" && (
+        <GritoControloModal
+          dinamica={controlo}
+          onClose={() => setControlo(null)}
+          onChange={onChange}
+        />
+      )}
+      {controlo && controlo.tipo !== "grito" && (
         <QuizControloModal
           dinamica={controlo}
           onClose={() => setControlo(null)}
@@ -1374,6 +1405,382 @@ function QuizControloModal({
   );
 }
 
+/* ================= Controlo do Grito de Guerra (votação) ================ */
+
+type VotoAdmin = {
+  id: string;
+  votanteEquipa: { id: string; nome: string; cor: string };
+  votadaEquipa: { id: string; nome: string; cor: string };
+};
+type ApuramentoGrito = {
+  contagem: { equipaId: string; votos: number }[];
+  vencedorEquipaId: string | null;
+  maxVotos: number;
+  empate: boolean;
+};
+
+function GritoControloModal({
+  dinamica,
+  onClose,
+  onChange,
+}: {
+  dinamica: Dinamica;
+  onClose: () => void;
+  onChange: () => void;
+}) {
+  const [aberto, setAberto] = useState(dinamica.quizAberto);
+  const [qr, setQr] = useState<string>("");
+  const [projetar, setProjetar] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const [votos, setVotos] = useState<VotoAdmin[]>([]);
+  const [apuramento, setApuramento] = useState<ApuramentoGrito>({
+    contagem: [],
+    vencedorEquipaId: null,
+    maxVotos: 0,
+    empate: false,
+  });
+  const [busy, setBusy] = useState(false);
+  const [aEliminar, setAEliminar] = useState<string | null>(null);
+  const [confirmarLimpar, setConfirmarLimpar] = useState(false);
+
+  const url =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/v/${dinamica.id}`
+      : `/v/${dinamica.id}`;
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { width: 1024, margin: 1 })
+      .then(setQr)
+      .catch(() => setQr(""));
+  }, [url]);
+
+  const carregarVotos = useCallback(async () => {
+    try {
+      const d = await api<{ votos: VotoAdmin[]; apuramento: ApuramentoGrito }>(
+        `/api/gamificacao/dinamicas/${dinamica.id}/votos`
+      );
+      setVotos(d.votos);
+      setApuramento(d.apuramento);
+    } catch {
+      /* ignora falhas de polling */
+    }
+  }, [dinamica.id]);
+
+  useEffect(() => {
+    carregarVotos();
+    const t = setInterval(carregarVotos, 4000);
+    return () => clearInterval(t);
+  }, [carregarVotos]);
+
+  // Nome/cor por equipa (resolvido a partir dos votos observados).
+  const infoEquipa = useMemo(() => {
+    const m = new Map<string, { nome: string; cor: string }>();
+    for (const v of votos) {
+      m.set(v.votadaEquipa.id, {
+        nome: v.votadaEquipa.nome,
+        cor: v.votadaEquipa.cor,
+      });
+      m.set(v.votanteEquipa.id, {
+        nome: v.votanteEquipa.nome,
+        cor: v.votanteEquipa.cor,
+      });
+    }
+    return m;
+  }, [votos]);
+
+  const tabela = useMemo(
+    () =>
+      apuramento.contagem
+        .map((c) => ({
+          ...c,
+          nome: infoEquipa.get(c.equipaId)?.nome ?? "—",
+          cor: infoEquipa.get(c.equipaId)?.cor ?? "#94a3b8",
+        }))
+        .sort((a, b) => b.votos - a.votos || a.nome.localeCompare(b.nome)),
+    [apuramento.contagem, infoEquipa]
+  );
+
+  async function toggleAberto() {
+    const novo = !aberto;
+    setBusy(true);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ quizAberto: novo }),
+      });
+      setAberto(novo);
+      toast.success(novo ? "Votação aberta" : "Votação fechada");
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function copiar() {
+    navigator.clipboard?.writeText(url).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1500);
+    });
+  }
+
+  async function eliminarVoto(votoId: string) {
+    setAEliminar(votoId);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}/votos`, {
+        method: "DELETE",
+        body: JSON.stringify({ votoId }),
+      });
+      await carregarVotos();
+      onChange();
+      toast.success("Voto eliminado");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAEliminar(null);
+    }
+  }
+
+  async function eliminarTodos() {
+    setBusy(true);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}/votos`, {
+        method: "DELETE",
+        body: JSON.stringify({}),
+      });
+      await carregarVotos();
+      onChange();
+      toast.success("Todos os votos foram eliminados");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+      setConfirmarLimpar(false);
+    }
+  }
+
+  const vencedorNome = apuramento.vencedorEquipaId
+    ? infoEquipa.get(apuramento.vencedorEquipaId)?.nome ?? "—"
+    : null;
+
+  return (
+    <Modal
+      title={`Grito de Guerra — ${dinamica.nome}`}
+      onClose={onClose}
+      footer={
+        <Button variant="outline" onClick={onClose}>
+          Fechar
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-col items-center gap-2">
+          {qr ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={qr}
+              alt="QR Code da votação"
+              className="h-56 w-56 rounded-xl border border-slate-200"
+            />
+          ) : (
+            <div className="flex h-56 w-56 items-center justify-center rounded-xl border border-slate-200 text-slate-300">
+              <QrCode className="h-10 w-10" />
+            </div>
+          )}
+          <p className="text-center text-xs text-slate-500">
+            Projeta ou imprime este QR Code. Cada grupo lê, escolhe o seu grupo e
+            vota no melhor grito de guerra de outro grupo.
+          </p>
+          <Button
+            variant="navy"
+            size="sm"
+            className="w-full"
+            onClick={() => setProjetar(true)}
+            disabled={!qr}
+          >
+            <Maximize className="h-4 w-4" /> Projetar em ecrã cheio
+          </Button>
+          <div className="flex w-full items-center gap-2">
+            <input
+              readOnly
+              value={url}
+              className="h-9 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs text-slate-600 outline-none"
+            />
+            <Button size="sm" variant="outline" onClick={copiar}>
+              {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+
+        {projetar && (
+          <QrProjecao
+            url={url}
+            qr={qr}
+            titulo={dinamica.nome}
+            onClose={() => setProjetar(false)}
+          />
+        )}
+
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
+          <div>
+            <p className="text-sm font-semibold text-navy">
+              {aberto ? "Aberta a votos" : "Fechada"}
+            </p>
+            <p className="text-xs text-slate-400">
+              {aberto
+                ? "Os grupos já podem votar."
+                : "Abre quando quiseres começar a votação."}{" "}
+              {nf(dinamica.valorPorVoto)} pt por voto ao vencedor.
+            </p>
+          </div>
+          <Button
+            variant={aberto ? "outline" : "navy"}
+            size="sm"
+            disabled={busy}
+            onClick={toggleAberto}
+          >
+            <Radio className="h-4 w-4" /> {aberto ? "Fechar" : "Abrir votação"}
+          </Button>
+        </div>
+
+        {/* Apuramento */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-700">
+              Votos ({votos.length})
+            </p>
+            <span className="flex items-center gap-1 text-xs text-slate-400">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-400" />
+              </span>
+              ao vivo
+            </span>
+          </div>
+
+          {/* Estado do vencedor */}
+          {votos.length > 0 && (
+            <div
+              className={`mb-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                vencedorNome
+                  ? "bg-green-50 text-green-700"
+                  : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {vencedorNome ? (
+                <>
+                  <Trophy className="mr-1 inline h-4 w-4" /> Vencedor:{" "}
+                  <strong>{vencedorNome}</strong> — {apuramento.maxVotos} voto
+                  {apuramento.maxVotos === 1 ? "" : "s"} ·{" "}
+                  {nf(apuramento.maxVotos * dinamica.valorPorVoto)} pontos
+                </>
+              ) : (
+                <>Empate no topo ({apuramento.maxVotos}) — sem vencedor por agora.</>
+              )}
+            </div>
+          )}
+
+          {votos.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400">
+              Ainda sem votos.
+            </p>
+          ) : (
+            <>
+              {/* Barras por equipa */}
+              <div className="mb-3 space-y-1.5">
+                {tabela.map((t) => {
+                  const pct =
+                    apuramento.maxVotos > 0
+                      ? (t.votos / apuramento.maxVotos) * 100
+                      : 0;
+                  const venc = t.equipaId === apuramento.vencedorEquipaId;
+                  return (
+                    <div key={t.equipaId} className="flex items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: t.cor }}
+                      />
+                      <span className="w-24 shrink-0 truncate text-xs font-medium text-slate-700">
+                        {t.nome}
+                        {venc && (
+                          <Crown className="ml-1 inline h-3 w-3 text-amber-500" />
+                        )}
+                      </span>
+                      <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-slate-100">
+                        <span
+                          className="absolute inset-y-0 left-0 rounded-full"
+                          style={{ width: `${pct}%`, background: t.cor }}
+                        />
+                      </span>
+                      <span className="w-6 shrink-0 text-right text-xs font-bold text-navy">
+                        {t.votos}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Lista de votos individuais */}
+              <div className="max-h-40 space-y-1.5 overflow-y-auto">
+                {votos.map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-slate-500">
+                      <span className="font-medium text-slate-700">
+                        {v.votanteEquipa.nome}
+                      </span>{" "}
+                      votou em{" "}
+                      <span className="font-medium text-slate-700">
+                        {v.votadaEquipa.nome}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      title="Eliminar este voto"
+                      disabled={aEliminar === v.id}
+                      onClick={() => eliminarVoto(v.id)}
+                      className="shrink-0 rounded-md p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-2 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setConfirmarLimpar(true)}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" /> Eliminar todos os votos
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {confirmarLimpar && (
+        <ConfirmDialog
+          title="Eliminar todos os votos?"
+          message={`Vais apagar os ${votos.length} votos desta dinâmica e limpar a pontuação. Esta acção não pode ser anulada.`}
+          confirmLabel="Eliminar todos"
+          danger
+          busy={busy}
+          onConfirm={eliminarTodos}
+          onCancel={() => setConfirmarLimpar(false)}
+        />
+      )}
+    </Modal>
+  );
+}
+
 /* ==================== Projeção do QR em ecrã cheio ===================== */
 
 function QrProjecao({
@@ -1500,11 +1907,18 @@ function DinamicaForm({
   const [nome, setNome] = useState(dinamica?.nome ?? "");
   const [descricao, setDescricao] = useState(dinamica?.descricao ?? "");
   const [peso, setPeso] = useState(String(dinamica?.peso ?? 1));
-  const [tipo, setTipo] = useState<"manual" | "quiz">(
-    dinamica?.tipo === "quiz" ? "quiz" : "manual"
+  const [tipo, setTipo] = useState<"manual" | "quiz" | "grito">(
+    dinamica?.tipo === "quiz"
+      ? "quiz"
+      : dinamica?.tipo === "grito"
+        ? "grito"
+        : "manual"
   );
   const [valorPorAcerto, setValorPorAcerto] = useState(
     String(dinamica?.valorPorAcerto ?? 10)
+  );
+  const [valorPorVoto, setValorPorVoto] = useState(
+    String(dinamica?.valorPorVoto ?? 10)
   );
   const [bonusRapidezMax, setBonusRapidezMax] = useState(
     String(dinamica?.bonusRapidezMax ?? 20)
@@ -1560,6 +1974,8 @@ function DinamicaForm({
               .filter((o) => o.texto.trim())
               .map((o) => ({ texto: o.texto.trim(), correta: o.correta })),
           }));
+      } else if (tipo === "grito") {
+        payload.valorPorVoto = Number(valorPorVoto) || 10;
       }
       await api(
         dinamica
@@ -1658,7 +2074,7 @@ function DinamicaForm({
 
         <div>
           <Label className="mb-1 block">Tipo de dinâmica</Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setTipo("manual")}
@@ -1687,8 +2103,47 @@ function DinamicaForm({
                 Membros respondem pelo telemóvel
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => setTipo("grito")}
+              className={`rounded-lg border-2 px-3 py-2 text-left text-sm transition ${
+                tipo === "grito"
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <span className="font-semibold text-navy">Grito de Guerra</span>
+              <span className="block text-xs text-slate-400">
+                Votação por QR: vence o mais votado
+              </span>
+            </button>
           </div>
         </div>
+
+        {tipo === "grito" && (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-xs text-slate-500">
+              Partilha um único QR Code. Cada grupo lê, escolhe o seu grupo e vota
+              no melhor grito de guerra de <strong>outro</strong> grupo. Só é
+              permitido <strong>um voto por grupo</strong> (o primeiro a votar
+              decide). Vence o grupo mais votado; havendo empate no topo, não há
+              vencedor. Só o vencedor pontua.
+            </p>
+            <div className="max-w-[12rem]">
+              <Label className="mb-1 block text-xs">Pontos por voto</Label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={valorPorVoto}
+                onChange={(e) => setValorPorVoto(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Pontos do vencedor = nº de votos × este valor.
+              </p>
+            </div>
+          </div>
+        )}
 
         {tipo === "quiz" && (
           <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
@@ -1852,18 +2307,19 @@ function PontosTab({
   onSaved: () => void;
 }) {
   // Todas as dinâmicas aparecem na grelha. As manuais são editáveis; as de quiz
-  // entram só para leitura (pontuadas automaticamente pelas respostas), para se
-  // ver o contributo delas no total por equipa.
+  // e grito entram só para leitura (pontuadas automaticamente pelas respostas /
+  // votos), para se ver o contributo delas no total por equipa.
+  const ehAuto = (t: string) => t === "quiz" || t === "grito";
   const todas = useMemo(() => evento.dinamicas, [evento]);
   const manuais = useMemo(
-    () => todas.filter((d) => d.tipo !== "quiz"),
+    () => todas.filter((d) => !ehAuto(d.tipo)),
     [todas]
   );
-  // Pontos de quiz por célula (dinâmica+equipa), da Classificacao já calculada.
+  // Pontos automáticos por célula (dinâmica+equipa), da Classificacao calculada.
   const quizPts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const d of todas) {
-      if (d.tipo !== "quiz") continue;
+      if (!ehAuto(d.tipo)) continue;
       for (const c of d.classificacoes) {
         map[cellKey(d.id, c.equipaId)] = c.pontos;
       }
@@ -1899,10 +2355,10 @@ function PontosTab({
     const t: Record<string, number> = {};
     for (const eq of evento.equipas) t[eq.id] = 0;
     for (const d of todas) {
-      const ehQuiz = d.tipo === "quiz";
+      const auto = ehAuto(d.tipo);
       for (const eq of evento.equipas) {
         const k = cellKey(d.id, eq.id);
-        const v = ehQuiz ? quizPts[k] ?? 0 : Number(grid[k] ?? 0) || 0;
+        const v = auto ? quizPts[k] ?? 0 : Number(grid[k] ?? 0) || 0;
         t[eq.id] += v * (d.peso ?? 1);
       }
     }
@@ -1954,9 +2410,9 @@ function PontosTab({
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Lança a pontuação de cada equipa nas dinâmicas manuais. As de quiz (a
-          cinzento) são automáticas e já contam para o total. A posição sai do
-          total.
+          Lança a pontuação de cada equipa nas dinâmicas manuais. As de quiz e
+          grito (a cinzento) são automáticas e já contam para o total. A posição
+          sai do total.
         </p>
         <Button variant="navy" onClick={salvar} disabled={!dirty || saving}>
           <Save /> {saving ? "Guardando…" : "Guardar pontuações"}
@@ -1988,21 +2444,32 @@ function PontosTab({
             </thead>
             <tbody>
               {todas.map((d) => {
-                const ehQuiz = d.tipo === "quiz";
+                const auto = ehAuto(d.tipo);
+                const ehGrito = d.tipo === "grito";
                 return (
                   <tr key={d.id} className="border-t border-slate-100">
                     <td className="sticky left-0 z-10 bg-white px-3 py-2">
                       <div className="flex items-center gap-1.5 font-medium text-slate-700">
                         {d.nome}
-                        {ehQuiz && (
+                        {auto && (
                           <Badge variant="secondary" className="font-normal">
-                            <QrCode className="mr-1 h-3 w-3" /> quiz
+                            {ehGrito ? (
+                              <>
+                                <Megaphone className="mr-1 h-3 w-3" /> grito
+                              </>
+                            ) : (
+                              <>
+                                <QrCode className="mr-1 h-3 w-3" /> quiz
+                              </>
+                            )}
                           </Badge>
                         )}
                       </div>
-                      {ehQuiz ? (
+                      {auto ? (
                         <div className="text-xs text-slate-400">
-                          automático (pelas respostas)
+                          {ehGrito
+                            ? "automático (pelos votos)"
+                            : "automático (pelas respostas)"}
                           {d.peso !== 1 ? ` · ×${nf(d.peso)}` : ""}
                         </div>
                       ) : (
@@ -2017,13 +2484,13 @@ function PontosTab({
                       const k = cellKey(d.id, eq.id);
                       return (
                         <td key={eq.id} className="px-2 py-1.5 text-center">
-                          {ehQuiz ? (
+                          {auto ? (
                             <input
                               type="text"
                               value={nf(quizPts[k] ?? 0)}
                               readOnly
                               disabled
-                              title="Pontuação automática do quiz (não editável)"
+                              title="Pontuação automática (não editável)"
                               className="h-9 w-20 cursor-not-allowed rounded-md border border-slate-100 bg-slate-50 text-center text-slate-400"
                             />
                           ) : (

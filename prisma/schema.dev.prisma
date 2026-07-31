@@ -362,6 +362,8 @@ model Equipa {
   membros        EquipaMembro[]
   classificacoes Classificacao[]
   submissoes     QuizSubmissao[]
+  votosDados     GritoVoto[] @relation("VotanteEquipa")
+  votosRecebidos GritoVoto[] @relation("VotadaEquipa")
 
   @@index([eventoId])
 }
@@ -398,12 +400,16 @@ model Dinamica {
   valorPorAcerto  Float   @default(10) // pontos por pergunta certa
   bonusRapidezMax Float   @default(20) // bónus máximo de rapidez por membro (0 = sem bónus)
   tempoLimiteSeg  Int? // segundos por pergunta (também usado no bónus de rapidez); null = sem limite
+  // ---- Configuração específica do Grito de Guerra (votação) ----
+  // `quizAberto` (acima) é reutilizado como "aberto a votos".
+  valorPorVoto    Float   @default(10) // pontos por voto recebido; só o vencedor pontua
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
   classificacoes Classificacao[]
   perguntas      QuizPergunta[]
   submissoes     QuizSubmissao[]
+  votos          GritoVoto[]
 
   @@index([eventoId])
 }
@@ -467,4 +473,29 @@ model QuizSubmissao {
   @@unique([dinamicaId, equipaId, nomeMembro])
   @@index([dinamicaId])
   @@index([equipaId])
+}
+
+// ---------------------------------------------------------------------------
+// Grito de Guerra (dinâmica tipo "grito"): votação por QR Code partilhado.
+// Cada equipa vota UMA vez noutra equipa (não na própria). O primeiro membro a
+// votar fixa o voto da equipa; vence a equipa mais votada. Só o vencedor
+// pontua: pontos = nº de votos recebidos × `valorPorVoto`. Havendo empate no
+// topo, não há vencedor (ninguém pontua).
+// ---------------------------------------------------------------------------
+model GritoVoto {
+  id              String   @id @default(cuid())
+  dinamicaId      String
+  dinamica        Dinamica @relation(fields: [dinamicaId], references: [id], onDelete: Cascade)
+  // Equipa que emitiu o voto (uma só por equipa/dinâmica).
+  votanteEquipaId String
+  votanteEquipa   Equipa   @relation("VotanteEquipa", fields: [votanteEquipaId], references: [id], onDelete: Cascade)
+  // Equipa votada.
+  votadaEquipaId  String
+  votadaEquipa    Equipa   @relation("VotadaEquipa", fields: [votadaEquipaId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+
+  @@unique([dinamicaId, votanteEquipaId])
+  @@index([dinamicaId])
+  @@index([votanteEquipaId])
+  @@index([votadaEquipaId])
 }

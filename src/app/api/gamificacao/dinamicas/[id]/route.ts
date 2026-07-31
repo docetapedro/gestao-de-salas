@@ -26,6 +26,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
       body.tempoLimiteSeg !== undefined;
     const cfg = temConfigQuiz ? lerConfigQuiz(body) : undefined;
 
+    let valorPorVoto: number | undefined;
+    if (body.valorPorVoto !== undefined) {
+      const vpv = Number(body.valorPorVoto);
+      valorPorVoto = Number.isFinite(vpv) && vpv >= 0 ? vpv : 10;
+    }
+
     const dinamica = await prisma.dinamica.update({
       where: { id },
       data: {
@@ -43,11 +49,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
           body.tipo !== undefined
             ? body.tipo === "quiz"
               ? "quiz"
-              : "manual"
+              : body.tipo === "grito"
+                ? "grito"
+                : "manual"
             : undefined,
         quizAberto:
           body.quizAberto !== undefined ? Boolean(body.quizAberto) : undefined,
         ...(cfg ?? {}),
+        valorPorVoto,
       },
     });
 
