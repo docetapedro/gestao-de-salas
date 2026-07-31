@@ -362,6 +362,8 @@ model Equipa {
   membros        EquipaMembro[]
   classificacoes Classificacao[]
   submissoes     QuizSubmissao[]
+  cartoesTesouro      TesouroCartao[] @relation("EnvelopeEquipa")
+  cartoesIntroduzidos TesouroCartao[] @relation("CartaoIntroduzidoPor")
   votosDados     GritoVoto[] @relation("VotanteEquipa")
   votosRecebidos GritoVoto[] @relation("VotadaEquipa")
 
@@ -409,6 +411,7 @@ model Dinamica {
   classificacoes Classificacao[]
   perguntas      QuizPergunta[]
   submissoes     QuizSubmissao[]
+  cartoesTesouro TesouroCartao[]
   votos          GritoVoto[]
 
   @@index([eventoId])
@@ -471,6 +474,33 @@ model QuizSubmissao {
   createdAt      DateTime @default(now())
 
   @@unique([dinamicaId, equipaId, nomeMembro])
+  @@index([dinamicaId])
+  @@index([equipaId])
+}
+
+// ---------------------------------------------------------------------------
+// Caça ao Tesouro (dinâmica tipo "tesouro"): um baú cooperativo por dinâmica.
+// Existem N cartões, cada um com um código alfanumérico. As equipas têm
+// envelopes físicos com alguns códigos; introduzem-nos na app e o baú abre
+// quando TODOS os cartões estiverem introduzidos.
+// ---------------------------------------------------------------------------
+model TesouroCartao {
+  id         String   @id @default(cuid())
+  dinamicaId String
+  dinamica   Dinamica @relation(fields: [dinamicaId], references: [id], onDelete: Cascade)
+  codigo     String // código alfanumérico normalizado (maiúsculas, sem espaços)
+  etiqueta   String? // rótulo opcional do cartão (ex.: "Pista 3")
+  // Envelope a que o cartão pertence (opcional, só para organizar/imprimir).
+  equipaId   String?
+  equipa     Equipa?  @relation("EnvelopeEquipa", fields: [equipaId], references: [id], onDelete: SetNull)
+  // Progresso: instante em que o código foi introduzido (null = por descobrir)
+  // e equipa que o introduziu.
+  introduzidoEm          DateTime?
+  introduzidoPorEquipaId String?
+  introduzidoPor         Equipa?   @relation("CartaoIntroduzidoPor", fields: [introduzidoPorEquipaId], references: [id], onDelete: SetNull)
+  createdAt              DateTime  @default(now())
+
+  @@unique([dinamicaId, codigo])
   @@index([dinamicaId])
   @@index([equipaId])
 }

@@ -1,6 +1,14 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -20,7 +28,9 @@ import {
   Copy,
   Crown,
   Gamepad2,
+  KeyRound,
   ListChecks,
+  Lock,
   Maximize,
   Medal,
   Megaphone,
@@ -28,7 +38,9 @@ import {
   Plus,
   QrCode,
   Radio,
+  RotateCcw,
   Save,
+  Sparkles,
   Timer,
   Trash2,
   Trophy,
@@ -64,6 +76,14 @@ type QuizSubmissao = {
   totalPerguntas: number;
   pontos: number;
 };
+type TesouroCartao = {
+  id: string;
+  codigo: string;
+  etiqueta: string | null;
+  equipaId: string | null;
+  introduzidoEm: string | null;
+  introduzidoPorEquipaId: string | null;
+};
 type GritoVoto = {
   id: string;
   votanteEquipaId: string;
@@ -75,7 +95,7 @@ type Dinamica = {
   descricao: string | null;
   peso: number;
   ordem: number;
-  tipo: string; // "manual" | "quiz" | "grito"
+  tipo: string; // "manual" | "quiz" | "tesouro" | "grito"
   quizAberto: boolean;
   valorPorAcerto: number;
   bonusRapidezMax: number;
@@ -84,6 +104,7 @@ type Dinamica = {
   classificacoes: Classificacao[];
   perguntas: QuizPergunta[];
   submissoes: QuizSubmissao[];
+  cartoesTesouro: TesouroCartao[];
   votos: GritoVoto[];
 };
 type Evento = {
@@ -805,6 +826,7 @@ function DinamicasTab({
   const [modal, setModal] = useState<null | Dinamica | {}>(null);
   const [remover, setRemover] = useState<Dinamica | null>(null);
   const [controlo, setControlo] = useState<Dinamica | null>(null);
+  const [bau, setBau] = useState<Dinamica | null>(null);
   const [busy, setBusy] = useState(false);
   const [movendo, setMovendo] = useState(false);
 
@@ -933,6 +955,11 @@ function DinamicasTab({
                         <Radio className="h-3 w-3" /> Aberto
                       </Badge>
                     )}
+                    {d.tipo === "tesouro" && (
+                      <Badge className="gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100">
+                        <KeyRound className="h-3 w-3" /> Caça ao Tesouro
+                      </Badge>
+                    )}
                     {d.tipo === "grito" && (
                       <Badge className="gap-1 bg-purple-100 text-purple-700 hover:bg-purple-100">
                         <Megaphone className="h-3 w-3" /> Grito de Guerra
@@ -957,6 +984,16 @@ function DinamicasTab({
                       {d.submissoes.length === 1 ? "" : "s"}
                     </p>
                   )}
+                  {d.tipo === "tesouro" && (
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {d.cartoesTesouro.filter((c) => c.introduzidoEm).length}/
+                      {d.cartoesTesouro.length} código
+                      {d.cartoesTesouro.length === 1 ? "" : "s"} introduzido
+                      {d.cartoesTesouro.filter((c) => c.introduzidoEm).length === 1
+                        ? ""
+                        : "s"}
+                    </p>
+                  )}
                   {d.tipo === "grito" && (
                     <p className="mt-0.5 text-xs text-slate-400">
                       {d.votos.length} voto{d.votos.length === 1 ? "" : "s"} ·{" "}
@@ -974,6 +1011,17 @@ function DinamicasTab({
                       onClick={() => setControlo(d)}
                     >
                       <QrCode className="h-4 w-4" /> QR
+                    </Button>
+                  )}
+                  {/* Baú: ecrã de projeção do desbloqueio (caça ao tesouro) */}
+                  {d.tipo === "tesouro" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+                      onClick={() => setBau(d)}
+                    >
+                      <Lock className="h-4 w-4" /> Baú
                     </Button>
                   )}
                   <div className="flex gap-1 md:opacity-0 md:transition md:group-hover:opacity-100">
@@ -1004,6 +1052,7 @@ function DinamicasTab({
       {modal && (
         <DinamicaForm
           eventoId={evento.id}
+          equipas={evento.equipas}
           dinamica={"id" in modal ? (modal as Dinamica) : null}
           onClose={() => setModal(null)}
           onSaved={() => {
@@ -1037,6 +1086,7 @@ function DinamicasTab({
           onChange={onChange}
         />
       )}
+      {bau && <BauProjecao dinamica={bau} onClose={() => setBau(null)} />}
     </div>
   );
 }
@@ -1781,6 +1831,671 @@ function GritoControloModal({
   );
 }
 
+/* ============ Baú da Caça ao Tesouro (projeção do desbloqueio) ========= */
+
+function BauProjecao({
+  dinamica,
+  onClose,
+}: {
+  dinamica: Dinamica;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fs, setFs] = useState(false);
+
+  // Cada cartão é um bloco da chave (ex.: "A1"). A ordem é a do editor.
+  const blocos = useMemo(
+    () =>
+      dinamica.cartoesTesouro
+        .map((c) => ({
+          id: c.id,
+          resposta: (c.codigo || "").toUpperCase().replace(/\s+/g, ""),
+          etiqueta: c.etiqueta,
+        }))
+        .filter((b) => b.resposta.length > 0),
+    [dinamica.cartoesTesouro]
+  );
+
+  const [valores, setValores] = useState<string[]>(() =>
+    blocos.map(() => "")
+  );
+  const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const [aberto, setAberto] = useState(false);
+  // Estado de "chave errada" (feedback só depois de tudo preenchido).
+  const [errado, setErrado] = useState(false);
+
+  // Sem pistas por bloco: só se sabe se está preenchido, não se está certo.
+  const nPreenchidos = blocos.filter(
+    (b, i) => (valores[i] ?? "").length === b.resposta.length
+  ).length;
+  const todosPreenchidos = blocos.length > 0 && nPreenchidos === blocos.length;
+  const todosCertos =
+    blocos.length > 0 &&
+    blocos.every((b, i) => (valores[i] ?? "").toUpperCase() === b.resposta);
+
+  // Só quando TODOS os blocos estão preenchidos é que se avalia a chave:
+  // certa → abre; errada → treme a vermelho e deixa corrigir.
+  useEffect(() => {
+    if (!todosPreenchidos || aberto) return;
+    if (todosCertos) {
+      const t = setTimeout(() => setAberto(true), 300);
+      return () => clearTimeout(t);
+    }
+    setErrado(true);
+    const t = setTimeout(() => setErrado(false), 1500);
+    return () => clearTimeout(t);
+  }, [todosPreenchidos, todosCertos, aberto]);
+
+  // Som de desbloqueio (sintetizado — sem ficheiros): clunk do cadeado +
+  // arpejo dourado + brilho. Toca sempre que o baú passa a aberto.
+  useEffect(() => {
+    if (!aberto) return;
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      const now = ctx.currentTime;
+      const nota = (
+        freq: number,
+        t0: number,
+        dur: number,
+        vol: number,
+        tipo: OscillatorType
+      ) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = tipo;
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0006, t0 + dur);
+        o.connect(g).connect(ctx.destination);
+        o.start(t0);
+        o.stop(t0 + dur + 0.05);
+      };
+      // Clunk grave do cadeado a partir.
+      const clunk = ctx.createOscillator();
+      const cg = ctx.createGain();
+      clunk.type = "sine";
+      clunk.frequency.setValueAtTime(150, now);
+      clunk.frequency.exponentialRampToValueAtTime(55, now + 0.18);
+      cg.gain.setValueAtTime(0.0001, now);
+      cg.gain.exponentialRampToValueAtTime(0.5, now + 0.01);
+      cg.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      clunk.connect(cg).connect(ctx.destination);
+      clunk.start(now);
+      clunk.stop(now + 0.26);
+      // Arpejo dourado (Dó maior a subir).
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+        nota(f, now + 0.12 + i * 0.09, 0.6, 0.32, "triangle")
+      );
+      // Brilho cintilante.
+      for (let i = 0; i < 5; i++)
+        nota(1500 + i * 420, now + 0.42 + i * 0.05, 0.28, 0.11, "sine");
+      const t = setTimeout(() => ctx.close().catch(() => {}), 1600);
+      return () => clearTimeout(t);
+    } catch {
+      /* áudio bloqueado/indisponível — ignora */
+    }
+  }, [aberto]);
+
+  // Partículas de brilho fixas (posições/atrasos deterministas por índice).
+  const faiscas = useMemo(
+    () =>
+      Array.from({ length: 22 }, (_, i) => ({
+        left: 6 + ((i * 37) % 88),
+        delay: (i % 11) * 0.18,
+        dur: 1.6 + ((i * 7) % 12) / 10,
+        size: 4 + (i % 4) * 2,
+      })),
+    []
+  );
+  const poeira = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => ({
+        left: (i * 61) % 100,
+        top: (i * 43) % 100,
+        delay: (i % 8) * 0.5,
+        dur: 5 + (i % 5),
+        size: 2 + (i % 3),
+      })),
+    []
+  );
+  // Fragmentos do cadeado a estilhaçar (voam para fora e caem).
+  const estilhacos = useMemo(
+    () =>
+      Array.from({ length: 8 }, (_, i) => ({
+        tx: (i - 3.5) * 24,
+        r: (i % 2 ? 1 : -1) * (200 + i * 55),
+        delay: (i % 3) * 0.02,
+        dur: 0.75 + (i % 3) * 0.12,
+      })),
+    []
+  );
+  // Moedas a saltar do baú em arco (com giro).
+  const moedas = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, i) => ({
+        cx: (i - 6.5) * 19,
+        peak: -(120 + (i % 5) * 42),
+        rot: (i % 2 ? 1 : -1) * (720 + (i % 3) * 360),
+        delay: 0.1 + (i % 7) * 0.06,
+        dur: 1.05 + (i % 5) * 0.14,
+      })),
+    []
+  );
+
+  useEffect(() => {
+    const onFs = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.fullscreenElement) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Foca o primeiro bloco ao abrir o ecrã.
+  useEffect(() => {
+    const t = setTimeout(() => inputsRef.current[0]?.focus(), 200);
+    return () => clearTimeout(t);
+  }, []);
+
+  async function toggleFs() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await ref.current?.requestFullscreen();
+    } catch {
+      /* alguns browsers bloqueiam sem gesto — ignora */
+    }
+  }
+
+  function setBloco(i: number, v: string) {
+    const b = blocos[i];
+    const nv = v
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, b.resposta.length);
+    setValores((vals) => vals.map((x, idx) => (idx === i ? nv : x)));
+    if (errado) setErrado(false);
+    // Ao encher o bloco, avança para o seguinte (sem revelar se está certo).
+    if (nv.length === b.resposta.length) inputsRef.current[i + 1]?.focus();
+  }
+
+  function reiniciar() {
+    setAberto(false);
+    setErrado(false);
+    setValores(blocos.map(() => ""));
+    setTimeout(() => inputsRef.current[0]?.focus(), 60);
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={`bau-cena fixed inset-0 z-[70] flex flex-col items-center justify-center overflow-hidden px-6 py-8 ${
+        aberto ? "is-open" : ""
+      }`}
+    >
+      {/* Fundo: brilho + poeira dourada */}
+      <div className="bau-fundo" />
+      <div className="bau-raios" aria-hidden />
+      <div className="pointer-events-none absolute inset-0">
+        {poeira.map((p, i) => (
+          <span
+            key={i}
+            className="bau-poeira"
+            style={{
+              left: `${p.left}%`,
+              top: `${p.top}%`,
+              width: p.size,
+              height: p.size,
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.dur}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Controlos */}
+      <div className="absolute right-4 top-4 z-20 flex gap-2">
+        <button
+          onClick={toggleFs}
+          title="Ecrã cheio"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-amber-100 backdrop-blur transition hover:bg-white/20"
+        >
+          <Maximize className="h-5 w-5" />
+        </button>
+        <button
+          onClick={() => {
+            if (document.fullscreenElement)
+              document.exitFullscreen().catch(() => {});
+            onClose();
+          }}
+          title="Fechar"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-amber-100 backdrop-blur transition hover:bg-white/20"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Cabeçalho */}
+      <div className="z-10 mb-6 text-center">
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-amber-400/80">
+          Caça ao Tesouro
+        </p>
+        <h1 className="bau-titulo mt-1 text-4xl font-black sm:text-6xl">
+          {dinamica.nome}
+        </h1>
+      </div>
+
+      {/* Cena do baú */}
+      <div className="bau-palco z-10">
+        {/* Faíscas do tesouro (só quando aberto) */}
+        {aberto && (
+          <div className="pointer-events-none absolute inset-0">
+            {faiscas.map((f, i) => (
+              <span
+                key={i}
+                className="bau-faisca"
+                style={{
+                  left: `${f.left}%`,
+                  width: f.size,
+                  height: f.size,
+                  animationDelay: `${f.delay}s`,
+                  animationDuration: `${f.dur}s`,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="bau">
+          {/* Interior luminoso (visível quando abre) */}
+          <div className="bau-interior">
+            <Sparkles className="bau-brilho-icone" />
+          </div>
+          {/* Corpo do baú */}
+          <div className="bau-corpo">
+            <span className="bau-banda" style={{ left: "18%" }} />
+            <span className="bau-banda" style={{ left: "50%" }} />
+            <span className="bau-banda" style={{ left: "82%" }} />
+            <span className="bau-fechadura" />
+          </div>
+          {/* Tampa */}
+          <div
+            className="bau-tampa"
+            style={{ transform: aberto ? "rotateX(-118deg)" : "rotateX(0deg)" }}
+          >
+            <span className="bau-banda-tampa" style={{ left: "18%" }} />
+            <span className="bau-banda-tampa" style={{ left: "50%" }} />
+            <span className="bau-banda-tampa" style={{ left: "82%" }} />
+          </div>
+          {/* Cadeado intacto (só fechado) */}
+          {!aberto && (
+            <div className={`bau-cadeado ${errado ? "nega" : ""}`}>
+              <Lock className="h-6 w-6" />
+            </div>
+          )}
+          {/* Cadeado a estilhaçar */}
+          {aberto && (
+            <div className="bau-estilhacos">
+              {estilhacos.map((e, i) => (
+                <span
+                  key={i}
+                  className="bau-estilhaco"
+                  style={
+                    {
+                      "--tx": `${e.tx}px`,
+                      "--r": `${e.r}`,
+                      animationDelay: `${e.delay}s`,
+                      animationDuration: `${e.dur}s`,
+                    } as unknown as CSSProperties
+                  }
+                />
+              ))}
+            </div>
+          )}
+          {/* Moedas a saltar */}
+          {aberto && (
+            <div className="bau-moedas">
+              {moedas.map((m, i) => (
+                <span
+                  key={i}
+                  className="bau-moeda"
+                  style={
+                    {
+                      "--cx": `${m.cx}px`,
+                      "--peak": `${m.peak}px`,
+                      "--rot": `${m.rot}deg`,
+                      animationDelay: `${m.delay}s`,
+                      animationDuration: `${m.dur}s`,
+                    } as unknown as CSSProperties
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Painel de estado / chave */}
+      <div className="z-10 mt-8 w-full max-w-2xl text-center">
+        {blocos.length === 0 ? (
+          <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-amber-200">
+            Esta dinâmica ainda não tem blocos. Edita a dinâmica e adiciona os
+            cartões (ex.: A1, B2, …) que compõem a chave.
+          </p>
+        ) : aberto ? (
+          <div className="bau-vitoria">
+            <p className="flex items-center justify-center gap-2 text-2xl font-black text-amber-300 sm:text-4xl">
+              <Trophy className="h-8 w-8" /> Baú desbloqueado!
+            </p>
+            <p className="mt-2 text-amber-100/80">
+              A chave estava certa. Atribui a pontuação manualmente na aba
+              “Lançar pontos”.
+            </p>
+            <button
+              onClick={reiniciar}
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-amber-100 backdrop-blur transition hover:bg-white/20"
+            >
+              <RotateCcw className="h-4 w-4" /> Voltar a fechar
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="mb-1 flex items-center justify-center gap-2 text-sm font-semibold uppercase tracking-widest text-amber-200/80">
+              <KeyRound className="h-4 w-4" /> Insere a chave de desbloqueio
+            </p>
+            <p
+              className={`mb-4 text-xs ${
+                errado ? "font-semibold text-red-400" : "text-amber-100/50"
+              }`}
+            >
+              {errado
+                ? "Chave incorreta — verifica os blocos e tenta de novo."
+                : `${nPreenchidos} / ${blocos.length} blocos preenchidos`}
+            </p>
+            <div className="flex flex-wrap items-start justify-center gap-2.5">
+              {blocos.map((b, i) => {
+                const cheio = (valores[i] ?? "").length === b.resposta.length;
+                return (
+                  <div key={b.id} className="flex flex-col items-center gap-1">
+                    <input
+                      ref={(el) => {
+                        inputsRef.current[i] = el;
+                      }}
+                      value={valores[i] ?? ""}
+                      onChange={(e) => setBloco(i, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Backspace" &&
+                          !(valores[i] ?? "") &&
+                          i > 0
+                        ) {
+                          inputsRef.current[i - 1]?.focus();
+                        }
+                      }}
+                      maxLength={b.resposta.length}
+                      inputMode="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-label={`Bloco ${i + 1}`}
+                      className={`bau-bloco ${cheio ? "cheio" : ""} ${
+                        errado ? "err" : ""
+                      }`}
+                      style={{ width: `${Math.max(3, b.resposta.length + 1.5)}ch` }}
+                    />
+                    <span className="max-w-[6rem] truncate text-[10px] uppercase tracking-wide text-amber-100/40">
+                      {b.etiqueta || `Bloco ${i + 1}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      {!fs && blocos.length > 0 && (
+        <button
+          onClick={toggleFs}
+          className="z-10 mt-6 inline-flex items-center gap-2 rounded-full bg-amber-500/90 px-5 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-400"
+        >
+          <Maximize className="h-4 w-4" /> Entrar em ecrã cheio
+        </button>
+      )}
+
+      <style>{`
+        .bau-cena {
+          background:
+            radial-gradient(120% 80% at 50% 15%, #1e1608 0%, #0a0a12 55%, #050509 100%);
+        }
+        .bau-fundo {
+          position: absolute; inset: 0;
+          background: radial-gradient(50% 45% at 50% 55%, rgba(245,158,11,.18), transparent 70%);
+          opacity: .5; transition: opacity .8s ease;
+        }
+        .bau-cena.is-open .bau-fundo { opacity: 1; }
+        .bau-raios {
+          position: absolute; left: 50%; top: 54%;
+          width: 160vmax; height: 160vmax; transform: translate(-50%, -50%);
+          background: repeating-conic-gradient(from 0deg,
+            rgba(253,224,71,.16) 0deg, rgba(253,224,71,0) 7deg 18deg);
+          -webkit-mask: radial-gradient(closest-side, #000 0%, transparent 62%);
+          mask: radial-gradient(closest-side, #000 0%, transparent 62%);
+          opacity: 0; animation: bau-spin 26s linear infinite;
+          transition: opacity 1s ease;
+        }
+        .bau-cena.is-open .bau-raios { opacity: .9; }
+        @keyframes bau-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        .bau-poeira {
+          position: absolute; border-radius: 9999px;
+          background: rgba(253,224,71,.5);
+          box-shadow: 0 0 6px rgba(253,224,71,.6);
+          animation: bau-flutua linear infinite; opacity: .5;
+        }
+        @keyframes bau-flutua {
+          0% { transform: translateY(8px); opacity: 0; }
+          30% { opacity: .6; }
+          100% { transform: translateY(-26px); opacity: 0; }
+        }
+
+        .bau-titulo {
+          background: linear-gradient(180deg, #fff7e0, #fbbf24 55%, #d97706);
+          -webkit-background-clip: text; background-clip: text; color: transparent;
+          text-shadow: 0 2px 30px rgba(245,158,11,.25);
+        }
+
+        .bau-palco {
+          position: relative; width: 360px; max-width: 88vw;
+          display: flex; align-items: flex-end; justify-content: center;
+        }
+        .bau {
+          position: relative; width: 300px; height: 236px; max-width: 82vw;
+          perspective: 1100px;
+          filter: drop-shadow(0 26px 30px rgba(0,0,0,.55));
+        }
+        .bau-cena.is-open .bau { animation: bau-salta .7s cubic-bezier(.22,1.4,.4,1); }
+        @keyframes bau-salta {
+          0% { transform: translateY(0) scale(1); }
+          40% { transform: translateY(-14px) scale(1.04); }
+          100% { transform: translateY(0) scale(1); }
+        }
+
+        .bau-corpo {
+          position: absolute; bottom: 0; left: 0; width: 300px; height: 138px;
+          border-radius: 10px 10px 14px 14px;
+          background:
+            linear-gradient(180deg, #7c3f12 0%, #5a2c0c 60%, #3f1e08 100%);
+          border: 3px solid #2c1606;
+          box-shadow: inset 0 8px 16px rgba(0,0,0,.35), inset 0 -6px 12px rgba(0,0,0,.4);
+          overflow: hidden;
+        }
+        .bau-interior {
+          position: absolute; bottom: 118px; left: 12px; width: 276px; height: 70px;
+          border-radius: 8px 8px 40px 40px;
+          background: radial-gradient(60% 100% at 50% 100%, #fff4c2, #fbbf24 45%, #b45309 90%);
+          opacity: 0; transform: scaleY(.2); transform-origin: bottom;
+          transition: opacity .5s ease .25s, transform .5s ease .25s;
+          box-shadow: 0 0 45px 12px rgba(251,191,36,.75);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .bau-cena.is-open .bau-interior { opacity: 1; transform: scaleY(1); }
+        .bau-brilho-icone {
+          width: 34px; height: 34px; color: #fffdf0;
+          filter: drop-shadow(0 0 8px #fff6cf);
+          animation: bau-pisca 1.6s ease-in-out infinite;
+        }
+        @keyframes bau-pisca { 0%,100% { opacity:.7; transform: scale(.9);} 50% { opacity:1; transform: scale(1.1);} }
+
+        .bau-banda {
+          position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px;
+          background: linear-gradient(90deg, #b45309, #fbbf24 45%, #92400e);
+          box-shadow: inset 0 0 4px rgba(0,0,0,.4);
+        }
+        .bau-fechadura {
+          position: absolute; top: 8px; left: 50%; width: 30px; height: 34px;
+          margin-left: -15px; border-radius: 4px;
+          background: linear-gradient(180deg, #fcd34d, #b45309);
+          border: 2px solid #7c2d12;
+          box-shadow: 0 0 10px rgba(251,191,36,.5);
+        }
+
+        .bau-tampa {
+          position: absolute; top: 16px; left: 0; width: 300px; height: 96px;
+          transform-origin: center bottom;
+          transition: transform .9s cubic-bezier(.34,1.2,.4,1);
+          border-radius: 16px 16px 6px 6px;
+          background: linear-gradient(180deg, #8a4a17 0%, #6d370f 100%);
+          border: 3px solid #2c1606;
+          box-shadow: inset 0 6px 14px rgba(255,220,150,.15), inset 0 -8px 14px rgba(0,0,0,.4);
+        }
+        .bau-banda-tampa {
+          position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px;
+          background: linear-gradient(90deg, #b45309, #fbbf24 45%, #92400e);
+          box-shadow: inset 0 0 4px rgba(0,0,0,.4);
+        }
+
+        .bau-cadeado {
+          position: absolute; top: 92px; left: 50%; width: 46px; height: 46px;
+          margin-left: -23px; border-radius: 10px; z-index: 5;
+          display: flex; align-items: center; justify-content: center;
+          color: #3f1e08;
+          background: linear-gradient(180deg, #fde68a, #f59e0b);
+          border: 2px solid #7c2d12;
+          box-shadow: 0 0 14px rgba(251,191,36,.55);
+          animation: bau-tremor 2.4s ease-in-out infinite;
+          transition: transform .6s ease, opacity .6s ease;
+        }
+        @keyframes bau-tremor {
+          0%,92%,100% { transform: rotate(0); }
+          94% { transform: rotate(-7deg); } 96% { transform: rotate(6deg); } 98% { transform: rotate(-3deg); }
+        }
+        .bau-cadeado.nega {
+          color: #7f1d1d;
+          background: linear-gradient(180deg, #fca5a5, #ef4444);
+          border-color: #7f1d1d;
+          box-shadow: 0 0 16px rgba(239,68,68,.7);
+          animation: bau-nega .5s;
+        }
+        @keyframes bau-nega {
+          0%,100% { transform: translateX(0); }
+          15% { transform: translateX(-8px) rotate(-6deg); }
+          30% { transform: translateX(8px) rotate(6deg); }
+          45% { transform: translateX(-7px) rotate(-5deg); }
+          60% { transform: translateX(7px) rotate(4deg); }
+          75% { transform: translateX(-4px) rotate(-2deg); }
+        }
+        /* Estilhaços do cadeado */
+        .bau-estilhacos { position: absolute; top: 96px; left: 50%; z-index: 7; pointer-events: none; }
+        .bau-estilhaco {
+          position: absolute; top: 0; left: 0; margin-left: -9px; width: 18px; height: 18px;
+          background: linear-gradient(160deg, #fde68a, #f59e0b 55%, #b45309);
+          border: 2px solid #7c2d12;
+          clip-path: polygon(50% 0, 100% 36%, 82% 100%, 18% 100%, 0 36%);
+          box-shadow: 0 0 8px rgba(251,191,36,.55);
+          animation-name: bau-estilhaco; animation-timing-function: cubic-bezier(.3,.7,.35,1);
+          animation-fill-mode: forwards;
+        }
+        @keyframes bau-estilhaco {
+          0% { transform: translate(0,0) rotate(0deg); opacity: 1; }
+          22% { transform: translate(calc(var(--tx) * .5), -38px) rotate(calc(var(--r) * .4deg)); opacity: 1; }
+          100% { transform: translate(var(--tx), 158px) rotate(calc(var(--r) * 1deg)); opacity: 0; }
+        }
+
+        /* Moedas a saltar */
+        .bau-moedas { position: absolute; top: 70px; left: 50%; z-index: 6; pointer-events: none; }
+        .bau-moeda {
+          position: absolute; top: 0; left: 0; margin-left: -12px; width: 24px; height: 24px;
+          border-radius: 9999px;
+          background:
+            radial-gradient(circle at 38% 32%, #fffbe6, #fcd34d 46%, #d97706 78%, #92400e 100%);
+          border: 1.5px solid #b45309;
+          box-shadow: 0 0 10px rgba(251,191,36,.6), inset 0 0 4px rgba(255,255,255,.5);
+          opacity: 0; animation-name: bau-moeda; animation-timing-function: cubic-bezier(.25,.6,.4,1);
+          animation-fill-mode: forwards;
+        }
+        .bau-moeda::after {
+          content: ""; position: absolute; inset: 5px; border-radius: 9999px;
+          border: 1.5px solid rgba(146,64,14,.5);
+        }
+        @keyframes bau-moeda {
+          0% { transform: translate(0,0) rotateY(0deg) scale(.5); opacity: 0; }
+          12% { opacity: 1; }
+          45% { transform: translate(calc(var(--cx) * .6), var(--peak)) rotateY(calc(var(--rot) * .5)) scale(1); opacity: 1; }
+          100% { transform: translate(var(--cx), 210px) rotateY(var(--rot)) scale(.9); opacity: 0; }
+        }
+
+        .bau-bloco {
+          height: 58px; text-align: center; text-transform: uppercase;
+          font-size: 24px; font-weight: 800; letter-spacing: .08em;
+          color: #fff7e0; caret-color: #fbbf24;
+          background: rgba(255,255,255,.06);
+          border: 2px solid rgba(251,191,36,.35);
+          border-radius: 12px; outline: none;
+          box-shadow: inset 0 2px 6px rgba(0,0,0,.35);
+          transition: border-color .2s, background .2s, box-shadow .2s, transform .1s;
+        }
+        .bau-bloco:focus { border-color: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,.25); }
+        .bau-bloco.cheio {
+          color: #fff7e0; background: rgba(251,191,36,.12);
+          border-color: rgba(251,191,36,.6);
+        }
+        .bau-bloco.err {
+          color: #fecaca; border-color: #ef4444; background: rgba(239,68,68,.16);
+          box-shadow: 0 0 14px rgba(239,68,68,.4); animation: bau-shake .4s;
+        }
+        @keyframes bau-shake {
+          0%,100% { transform: translateX(0); }
+          20% { transform: translateX(-6px); } 40% { transform: translateX(6px); }
+          60% { transform: translateX(-4px); } 80% { transform: translateX(4px); }
+        }
+
+        .bau-faisca {
+          position: absolute; bottom: 40%; border-radius: 9999px;
+          background: radial-gradient(circle, #fff6cf, #fbbf24 60%, transparent 75%);
+          animation: bau-sobe ease-out infinite; opacity: 0;
+        }
+        @keyframes bau-sobe {
+          0% { transform: translateY(0) scale(.6); opacity: 0; }
+          15% { opacity: 1; }
+          100% { transform: translateY(-240px) scale(1); opacity: 0; }
+        }
+        .bau-vitoria { animation: bau-aparece .6s ease both .2s; }
+        @keyframes bau-aparece { from { opacity: 0; transform: translateY(10px);} to { opacity:1; transform: none;} }
+      `}</style>
+    </div>
+  );
+}
+
 /* ==================== Projeção do QR em ecrã cheio ===================== */
 
 function QrProjecao({
@@ -1882,6 +2597,11 @@ function QrProjecao({
 
 type OpcaoEdit = { texto: string; correta: boolean };
 type PerguntaEdit = { enunciado: string; opcoes: OpcaoEdit[] };
+type CartaoEdit = { codigo: string; etiqueta: string; equipaId: string };
+
+function novoCartao(): CartaoEdit {
+  return { codigo: "", etiqueta: "", equipaId: "" };
+}
 
 function novaPergunta(): PerguntaEdit {
   return {
@@ -1895,11 +2615,13 @@ function novaPergunta(): PerguntaEdit {
 
 function DinamicaForm({
   eventoId,
+  equipas,
   dinamica,
   onClose,
   onSaved,
 }: {
   eventoId: string;
+  equipas: Equipa[];
   dinamica: Dinamica | null;
   onClose: () => void;
   onSaved: () => void;
@@ -1907,12 +2629,14 @@ function DinamicaForm({
   const [nome, setNome] = useState(dinamica?.nome ?? "");
   const [descricao, setDescricao] = useState(dinamica?.descricao ?? "");
   const [peso, setPeso] = useState(String(dinamica?.peso ?? 1));
-  const [tipo, setTipo] = useState<"manual" | "quiz" | "grito">(
+  const [tipo, setTipo] = useState<"manual" | "quiz" | "tesouro" | "grito">(
     dinamica?.tipo === "quiz"
       ? "quiz"
-      : dinamica?.tipo === "grito"
-        ? "grito"
-        : "manual"
+      : dinamica?.tipo === "tesouro"
+        ? "tesouro"
+        : dinamica?.tipo === "grito"
+          ? "grito"
+          : "manual"
   );
   const [valorPorAcerto, setValorPorAcerto] = useState(
     String(dinamica?.valorPorAcerto ?? 10)
@@ -1934,6 +2658,15 @@ function DinamicaForm({
         }))
       : [novaPergunta()]
   );
+  const [cartoes, setCartoes] = useState<CartaoEdit[]>(
+    dinamica?.cartoesTesouro?.length
+      ? dinamica.cartoesTesouro.map((c) => ({
+          codigo: c.codigo,
+          etiqueta: c.etiqueta ?? "",
+          equipaId: c.equipaId ?? "",
+        }))
+      : [novoCartao()]
+  );
   const [saving, setSaving] = useState(false);
 
   const quizInvalido =
@@ -1945,12 +2678,19 @@ function DinamicaForm({
         p.opcoes.some((o) => o.correta && o.texto.trim())
     );
 
+  const tesouroInvalido =
+    tipo === "tesouro" && !cartoes.some((c) => c.codigo.trim());
+
   async function salvar() {
     if (!nome.trim()) return;
     if (tipo === "quiz" && quizInvalido) {
       toast.error(
         "Cada pergunta precisa de enunciado, ≥2 opções e uma opção correta."
       );
+      return;
+    }
+    if (tipo === "tesouro" && tesouroInvalido) {
+      toast.error("Adiciona pelo menos um cartão com código.");
       return;
     }
     setSaving(true);
@@ -1973,6 +2713,14 @@ function DinamicaForm({
             opcoes: p.opcoes
               .filter((o) => o.texto.trim())
               .map((o) => ({ texto: o.texto.trim(), correta: o.correta })),
+          }));
+      } else if (tipo === "tesouro") {
+        payload.cartoes = cartoes
+          .filter((c) => c.codigo.trim())
+          .map((c) => ({
+            codigo: c.codigo.trim(),
+            etiqueta: c.etiqueta.trim() || null,
+            equipaId: c.equipaId || null,
           }));
       } else if (tipo === "grito") {
         payload.valorPorVoto = Number(valorPorVoto) || 10;
@@ -2027,7 +2775,9 @@ function DinamicaForm({
     <Modal
       title={dinamica ? "Editar dinâmica" : "Nova dinâmica"}
       onClose={onClose}
-      maxWidth={tipo === "quiz" ? "max-w-2xl" : "max-w-md"}
+      maxWidth={
+        tipo === "manual" || tipo === "grito" ? "max-w-md" : "max-w-2xl"
+      }
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
@@ -2074,7 +2824,7 @@ function DinamicaForm({
 
         <div>
           <Label className="mb-1 block">Tipo de dinâmica</Label>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setTipo("manual")}
@@ -2101,6 +2851,20 @@ function DinamicaForm({
               <span className="font-semibold text-navy">Quiz (QR Code)</span>
               <span className="block text-xs text-slate-400">
                 Membros respondem pelo telemóvel
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipo("tesouro")}
+              className={`rounded-lg border-2 px-3 py-2 text-left text-sm transition ${
+                tipo === "tesouro"
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <span className="font-semibold text-navy">Caça ao Tesouro</span>
+              <span className="block text-xs text-slate-400">
+                Reunir códigos para abrir o baú
               </span>
             </button>
             <button
@@ -2290,6 +3054,98 @@ function DinamicaForm({
                 <Plus className="h-4 w-4" /> Adicionar pergunta
               </Button>
             </div>
+          </div>
+        )}
+
+        {tipo === "tesouro" && (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-xs text-slate-500">
+              Cada cartão tem um código alfanumérico. Distribui os cartões
+              (físicos) pelos envelopes das equipas. O baú abre quando{" "}
+              <strong>todos</strong> os códigos forem introduzidos na app. A
+              etiqueta e o envelope são opcionais (só para te organizares).
+            </p>
+
+            <div className="space-y-2">
+              {cartoes.map((c, ci) => (
+                <div key={ci} className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-bold text-slate-400">
+                    {ci + 1}.
+                  </span>
+                  <Input
+                    value={c.codigo}
+                    onChange={(e) =>
+                      setCartoes((cs) =>
+                        cs.map((x, j) =>
+                          j === ci
+                            ? { ...x, codigo: e.target.value.toUpperCase() }
+                            : x
+                        )
+                      )
+                    }
+                    placeholder="Código (ex.: AZUL42)"
+                    className="h-9 flex-1 font-mono"
+                  />
+                  <Input
+                    value={c.etiqueta}
+                    onChange={(e) =>
+                      setCartoes((cs) =>
+                        cs.map((x, j) =>
+                          j === ci ? { ...x, etiqueta: e.target.value } : x
+                        )
+                      )
+                    }
+                    placeholder="Etiqueta"
+                    className="h-9 w-28 shrink-0"
+                  />
+                  <select
+                    value={c.equipaId}
+                    onChange={(e) =>
+                      setCartoes((cs) =>
+                        cs.map((x, j) =>
+                          j === ci ? { ...x, equipaId: e.target.value } : x
+                        )
+                      )
+                    }
+                    className="h-9 w-28 shrink-0 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-slate-400"
+                  >
+                    <option value="">— Envelope —</option>
+                    {equipas.map((eq) => (
+                      <option key={eq.id} value={eq.id}>
+                        {eq.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() =>
+                      setCartoes((cs) => cs.filter((_, j) => j !== ci))
+                    }
+                    disabled={cartoes.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setCartoes((cs) => [...cs, novoCartao()])}
+            >
+              <Plus className="h-4 w-4" /> Adicionar cartão
+            </Button>
+
+            <p className="text-xs text-slate-400">
+              {cartoes.filter((c) => c.codigo.trim()).length} código(s)
+              definido(s).
+            </p>
           </div>
         )}
       </div>

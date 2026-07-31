@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { gravarPerguntas, lerConfigQuiz } from "@/lib/quiz-payload";
+import { gravarCartoes } from "@/lib/tesouro-payload";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -49,9 +50,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
           body.tipo !== undefined
             ? body.tipo === "quiz"
               ? "quiz"
-              : body.tipo === "grito"
-                ? "grito"
-                : "manual"
+              : body.tipo === "tesouro"
+                ? "tesouro"
+                : body.tipo === "grito"
+                  ? "grito"
+                  : "manual"
             : undefined,
         quizAberto:
           body.quizAberto !== undefined ? Boolean(body.quizAberto) : undefined,
@@ -62,6 +65,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     if (Array.isArray(body.perguntas)) {
       await gravarPerguntas(id, body.perguntas);
+    }
+    if (Array.isArray(body.cartoes)) {
+      await gravarCartoes(id, body.cartoes);
     }
 
     return json({ dinamica });

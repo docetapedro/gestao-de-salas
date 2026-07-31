@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { gravarPerguntas, lerConfigQuiz } from "@/lib/quiz-payload";
+import { gravarCartoes } from "@/lib/tesouro-payload";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,9 +24,11 @@ export async function POST(req: NextRequest) {
     const tipo =
       body.tipo === "quiz"
         ? "quiz"
-        : body.tipo === "grito"
-          ? "grito"
-          : "manual";
+        : body.tipo === "tesouro"
+          ? "tesouro"
+          : body.tipo === "grito"
+            ? "grito"
+            : "manual";
     const cfg = lerConfigQuiz(body);
     const vpv = Number(body.valorPorVoto);
     const valorPorVoto = Number.isFinite(vpv) && vpv >= 0 ? vpv : 10;
@@ -45,6 +48,8 @@ export async function POST(req: NextRequest) {
 
     if (tipo === "quiz") {
       await gravarPerguntas(dinamica.id, body.perguntas);
+    } else if (tipo === "tesouro") {
+      await gravarCartoes(dinamica.id, body.cartoes);
     }
 
     return json({ dinamica }, 201);
