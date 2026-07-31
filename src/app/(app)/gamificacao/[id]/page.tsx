@@ -14,6 +14,8 @@ import { Modal, ConfirmDialog } from "@/components/Modal";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Check,
   Copy,
   Crown,
@@ -796,6 +798,46 @@ function DinamicasTab({
   const [remover, setRemover] = useState<Dinamica | null>(null);
   const [controlo, setControlo] = useState<Dinamica | null>(null);
   const [busy, setBusy] = useState(false);
+  const [movendo, setMovendo] = useState(false);
+
+  // Reordena: tira a dinâmica de `from` e insere-a em `to`, reindexa a lista
+  // toda (ordem = posição) e grava na base de dados só as que mudaram.
+  async function reordenar(from: number, to: number) {
+    const lista = evento.dinamicas;
+    if (
+      movendo ||
+      from === to ||
+      from < 0 ||
+      to < 0 ||
+      from >= lista.length ||
+      to >= lista.length
+    )
+      return;
+    const nova = [...lista];
+    const [item] = nova.splice(from, 1);
+    nova.splice(to, 0, item);
+    // Persiste apenas as dinâmicas cuja ordem (posição) mudou.
+    const alteradas = nova
+      .map((d, idx) => ({ d, idx }))
+      .filter(({ d, idx }) => d.ordem !== idx);
+    if (alteradas.length === 0) return;
+    setMovendo(true);
+    try {
+      await Promise.all(
+        alteradas.map(({ d, idx }) =>
+          api(`/api/gamificacao/dinamicas/${d.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ ordem: idx }),
+          })
+        )
+      );
+      onChange();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setMovendo(false);
+    }
+  }
 
   async function excluir() {
     if (!remover) return;
@@ -833,9 +875,40 @@ function DinamicasTab({
           {evento.dinamicas.map((d, i) => (
             <Card key={d.id} className="group">
               <CardContent className="flex items-center gap-3 p-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-sm font-bold text-brand-700">
-                  {i + 1}
-                </span>
+                <div className="flex flex-col items-center gap-0.5">
+                  <button
+                    type="button"
+                    title="Subir"
+                    disabled={i === 0 || movendo}
+                    onClick={() => reordenar(i, i - 1)}
+                    className="rounded p-0.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </button>
+                  {/* Seletor de posição: saltar diretamente para outra ordem. */}
+                  <select
+                    value={i}
+                    disabled={movendo || evento.dinamicas.length < 2}
+                    onChange={(e) => reordenar(i, Number(e.target.value))}
+                    title="Mudar para a posição…"
+                    className="h-7 w-7 shrink-0 cursor-pointer appearance-none rounded-lg bg-brand-50 text-center text-sm font-bold text-brand-700 outline-none focus:ring-2 focus:ring-brand-300 disabled:cursor-default"
+                  >
+                    {evento.dinamicas.map((_, pos) => (
+                      <option key={pos} value={pos}>
+                        {pos + 1}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    title="Descer"
+                    disabled={i === evento.dinamicas.length - 1 || movendo}
+                    onClick={() => reordenar(i, i + 1)}
+                    className="rounded p-0.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-navy">{d.nome}</p>
