@@ -174,6 +174,65 @@ export async function recomputarClassificacaoQuiz(
   }
 }
 
+/**
+ * Re-pontua TODAS as submissões de um quiz com a configuração ACTUAL da
+ * dinâmica (valorPorAcerto / bónus de rapidez / tempo) e recalcula a
+ * Classificacao de cada equipa afectada. Usar quando a config de pontuação é
+ * alterada depois de já existirem respostas — assim o valor novo aplica-se
+ * retroactivamente e o ranking actualiza.
+ *
+ * Usa os dados já guardados de cada submissão (nº de acertos e tempo): NÃO
+ * re-corrige o gabarito (as respostas cruas não são guardadas), só re-pontua.
+ */
+export async function recomputarSubmissoesQuiz(
+  dinamicaId: string
+): Promise<void> {
+  const dinamica = await prisma.dinamica.findUnique({
+    where: { id: dinamicaId },
+    select: {
+      tipo: true,
+      valorPorAcerto: true,
+      bonusRapidezMax: true,
+      tempoLimiteSeg: true,
+      submissoes: {
+        select: {
+          id: true,
+          equipaId: true,
+          certas: true,
+          totalPerguntas: true,
+          tempoMs: true,
+        },
+      },
+    },
+  });
+  if (!dinamica || dinamica.tipo !== "quiz") return;
+
+  const equipas = new Set<string>();
+  for (const s of dinamica.submissoes) {
+    // O `tempoLimiteSeg` é POR pergunta; o limite efectivo do bónus é
+    // limite × nº de perguntas (igual ao cálculo na submissão pública).
+    const limiteTotalSeg =
+      dinamica.tempoLimiteSeg != null
+        ? dinamica.tempoLimiteSeg * s.totalPerguntas
+        : null;
+    const pontos = pontuarSubmissao(s.certas, s.totalPerguntas, s.tempoMs, {
+      valorPorAcerto: dinamica.valorPorAcerto,
+      bonusRapidezMax: dinamica.bonusRapidezMax,
+      tempoLimiteSeg: limiteTotalSeg,
+    });
+    await prisma.quizSubmissao.update({
+      where: { id: s.id },
+      data: { pontos },
+    });
+    equipas.add(s.equipaId);
+  }
+
+  // Recalcula a pontuação de cada equipa (soma das suas submissões) no ranking.
+  for (const equipaId of equipas) {
+    await recomputarClassificacaoQuiz(dinamicaId, equipaId);
+  }
+}
+
 // ===========================================================================
 // Grito de Guerra (votação)
 // Cada equipa vota uma vez noutra equipa; vence a mais votada. SÓ o vencedor

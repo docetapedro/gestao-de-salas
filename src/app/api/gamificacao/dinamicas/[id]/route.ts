@@ -5,6 +5,7 @@ import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { gravarPerguntas, lerConfigQuiz } from "@/lib/quiz-payload";
 import { gravarCartoes } from "@/lib/tesouro-payload";
+import { recomputarSubmissoesQuiz } from "@/lib/gamificacao";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -75,6 +76,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
     if (Array.isArray(body.cartoes)) {
       await gravarCartoes(id, body.cartoes);
+    }
+
+    // Se a configuração de pontuação do quiz mudou (Pontos/acerto, bónus ou
+    // tempo), re-pontua as respostas já existentes e actualiza o ranking.
+    if (temConfigQuiz && dinamica.tipo === "quiz") {
+      await recomputarSubmissoesQuiz(id);
     }
 
     return json({ dinamica });
