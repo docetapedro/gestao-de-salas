@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "Gestão de Salas",
+  title: "Academia TIS",
   description: "Gestão de ocupação de salas em tempo real",
 };
 

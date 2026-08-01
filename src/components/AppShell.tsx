@@ -207,7 +207,7 @@ export default function AppShell({
   const current = flat
     .filter((f) => pathname === f.href || pathname.startsWith(f.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
-  const pageTitle = current?.label ?? "Gestão de Salas";
+  const pageTitle = current?.label ?? "Academia TIS";
 
   // Esconde rótulos só no desktop quando recolhido (no mobile o drawer mostra tudo).
   const hideOnCollapse = collapsed ? "lg:hidden" : "";
@@ -229,7 +229,7 @@ export default function AppShell({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/Logo.png"
-              alt="Gestão de Salas"
+              alt="Academia TIS"
               className="h-11 w-full object-contain object-left"
             />
           </div>

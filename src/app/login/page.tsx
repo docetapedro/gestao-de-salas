@@ -51,7 +51,7 @@ function LoginForm() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/Logo.png"
-            alt="Gestão de Salas"
+            alt="Academia TIS"
             className="mx-auto h-20 w-auto"
           />
         </div>

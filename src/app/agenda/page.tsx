@@ -14,7 +14,7 @@ export default function AgendaPublicaPage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/Logo.png"
-          alt="Gestão de Salas"
+          alt="Academia TIS"
           className="h-9 object-contain object-left"
         />
         <Link
