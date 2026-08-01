@@ -2050,6 +2050,53 @@ function BauProjecao({
     }
   }
 
+  // Feed de tentativas (a mais recente sempre no topo — vem ordenado desc).
+  const feed = (
+    <>
+      <p className="mb-2 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-200/70">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+        </span>
+        Tentativas ({tentativas.length})
+      </p>
+      {tentativas.length === 0 ? (
+        <p className="rounded-lg bg-white/5 px-3 py-3 text-center text-sm text-amber-100/40">
+          Ainda sem tentativas. Aguardem as equipas…
+        </p>
+      ) : (
+        <div className="max-h-[68vh] space-y-1.5 overflow-y-auto pr-1">
+          {tentativas.map((t) => (
+            <div
+              key={t.id}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
+                t.correta ? "bg-green-400/15" : "bg-white/5"
+              }`}
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: t.equipa.cor }}
+              />
+              <span className="shrink-0 font-semibold text-amber-50">
+                {t.equipa.nome}
+              </span>
+              <span className="truncate font-mono tracking-widest text-amber-100/60">
+                {t.combinacao}
+              </span>
+              <span className="ml-auto shrink-0">
+                {t.correta ? (
+                  <Check className="h-4 w-4 text-green-400" />
+                ) : (
+                  <X className="h-4 w-4 text-red-400/70" />
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div
       ref={ref}
@@ -2199,10 +2246,10 @@ function BauProjecao({
         </div>
       </div>
 
-      {/* Painel: QR + feed de tentativas (ou vencedor) */}
-      <div className="z-10 mt-6 w-full max-w-3xl px-2">
+      {/* Painel central: QR (por abrir) ou vencedor */}
+      <div className="z-10 mt-6 w-full max-w-xl px-2">
         {aberto && vencedor ? (
-          <div className="bau-vitoria mb-5 text-center">
+          <div className="bau-vitoria text-center">
             <p className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-[0.3em] text-amber-300/80">
               <Trophy className="h-5 w-5" /> Vencedor
             </p>
@@ -2214,7 +2261,7 @@ function BauProjecao({
             </p>
           </div>
         ) : (
-          <div className="mb-5 flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-2">
             {qr ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -2234,50 +2281,13 @@ function BauProjecao({
           </div>
         )}
 
-        {/* Feed de tentativas ao vivo */}
-        <div className="mx-auto max-w-xl">
-          <p className="mb-2 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-200/70">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
-            </span>
-            Tentativas ({tentativas.length})
-          </p>
-          {tentativas.length === 0 ? (
-            <p className="rounded-lg bg-white/5 px-3 py-3 text-center text-sm text-amber-100/40">
-              Ainda sem tentativas. Aguardem as equipas…
-            </p>
-          ) : (
-            <div className="max-h-44 space-y-1.5 overflow-y-auto">
-              {tentativas.map((t) => (
-                <div
-                  key={t.id}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
-                    t.correta ? "bg-green-400/15" : "bg-white/5"
-                  }`}
-                >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: t.equipa.cor }}
-                  />
-                  <span className="shrink-0 font-semibold text-amber-50">
-                    {t.equipa.nome}
-                  </span>
-                  <span className="truncate font-mono tracking-widest text-amber-100/60">
-                    {t.combinacao}
-                  </span>
-                  <span className="ml-auto shrink-0">
-                    {t.correta ? (
-                      <Check className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <X className="h-4 w-4 text-red-400/70" />
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Feed inline — só em ecrãs estreitos (nos largos vai no card lateral) */}
+        <div className="mx-auto mt-5 max-w-xl lg:hidden">{feed}</div>
+      </div>
+
+      {/* Card de tentativas — lateral à direita (ecrãs largos) */}
+      <div className="absolute right-4 top-1/2 z-10 hidden w-80 max-w-[26vw] -translate-y-1/2 rounded-2xl border border-amber-200/15 bg-black/30 p-4 shadow-2xl backdrop-blur lg:block xl:right-8">
+        {feed}
       </div>
 
       {/* Controlos inferiores */}
@@ -3490,12 +3500,16 @@ function RankingTab({
     try {
       const r = await api<{
         respostasApagadas: number;
+        votosApagados: number;
+        tentativasApagadas: number;
         classificacoesApagadas: number;
       }>(`/api/gamificacao/eventos/${eventoId}/repor-ranking`, {
         method: "POST",
       });
       toast.success(
-        `Ranking reposto (${r.classificacoesApagadas} pontuações e ${r.respostasApagadas} respostas apagadas)`
+        `Ranking reposto (${r.classificacoesApagadas} pontuações apagadas; ` +
+          `${r.respostasApagadas} respostas, ${r.votosApagados} votos, ` +
+          `${r.tentativasApagadas} tentativas de baú)`
       );
       setRepor(false);
       onChange();
@@ -3538,7 +3552,7 @@ function RankingTab({
       {repor && (
         <ConfirmDialog
           title="Repor ranking do evento?"
-          message="Vais apagar TODAS as pontuações (lançadas à mão e de quiz) e TODAS as respostas de TODAS as dinâmicas deste evento. O ranking fica a zero. Esta acção não pode ser anulada."
+          message="Vais apagar TODAS as pontuações e, em TODAS as dinâmicas deste evento: respostas de quiz, votos do grito e tentativas do baú (reabrindo-o). O ranking fica a zero. Esta acção não pode ser anulada."
           confirmLabel="Repor ranking"
           danger
           busy={busy}
