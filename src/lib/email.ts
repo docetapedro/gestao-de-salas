@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
 const apiKey = process.env.RESEND_API_KEY;
-const from = process.env.EMAIL_FROM || "Gestão de Salas <onboarding@resend.dev>";
+const from = process.env.EMAIL_FROM || "Academia TIS <onboarding@resend.dev>";
 
 const resend = apiKey ? new Resend(apiKey) : null;
 
