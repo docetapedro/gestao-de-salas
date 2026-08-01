@@ -189,9 +189,9 @@ export default function RankingProjecaoPage({
             <p>Sem equipas neste evento.</p>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col justify-center gap-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-6">
             {/* PÓDIO */}
-            <div className="flex items-end justify-center gap-3 sm:gap-6">
+            <div className="flex shrink-0 items-end justify-center gap-3 pt-4 sm:gap-6">
               {podio.map((r) => {
                 const first = r.posicao === 1;
                 return (
@@ -250,13 +250,13 @@ export default function RankingProjecaoPage({
               })}
             </div>
 
-            {/* RESTANTES */}
+            {/* RESTANTES — ocupam todo o espaço restante (sem scroll prematuro) */}
             {resto.length > 0 && (
-              <div className="mx-auto w-full max-w-3xl space-y-2 overflow-y-auto">
+              <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center gap-2 overflow-y-auto pr-1">
                 {resto.map((r) => (
                   <div
                     key={r.equipaId}
-                    className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-2.5 backdrop-blur"
+                    className="flex shrink-0 items-center gap-3 rounded-xl bg-white/5 px-4 py-2.5 backdrop-blur"
                   >
                     <span className="w-8 text-center text-lg font-bold text-brand-200">
                       {r.posicao}º
