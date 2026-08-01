@@ -1047,7 +1047,7 @@ function DinamicasTab({
                   {d.tipo === "grito" && (
                     <p className="mt-0.5 text-xs text-slate-400">
                       {d.votos.length} voto{d.votos.length === 1 ? "" : "s"} ·{" "}
-                      {nf(d.valorPorVoto)} pt/voto ao vencedor
+                      {nf(d.valorPorVoto)} pt ao vencedor
                     </p>
                   )}
                 </div>
@@ -1737,7 +1737,7 @@ function GritoControloModal({
               {aberto
                 ? "Os grupos já podem votar."
                 : "Abre quando quiseres começar a votação."}{" "}
-              {nf(dinamica.valorPorVoto)} pt por voto ao vencedor.
+              {nf(dinamica.valorPorVoto)} pt ao vencedor.
             </p>
           </div>
           <Button
@@ -1779,7 +1779,7 @@ function GritoControloModal({
                   <Trophy className="mr-1 inline h-4 w-4" /> Vencedor:{" "}
                   <strong>{vencedorNome}</strong> — {apuramento.maxVotos} voto
                   {apuramento.maxVotos === 1 ? "" : "s"} ·{" "}
-                  {nf(apuramento.maxVotos * dinamica.valorPorVoto)} pontos
+                  {nf(dinamica.valorPorVoto)} pontos
                 </>
               ) : (
                 <>Empate no topo ({apuramento.maxVotos}) — sem vencedor por agora.</>
@@ -3007,7 +3007,7 @@ function DinamicaForm({
               vencedor. Só o vencedor pontua.
             </p>
             <div className="max-w-[12rem]">
-              <Label className="mb-1 block text-xs">Pontos por voto</Label>
+              <Label className="mb-1 block text-xs">Pontos ao vencedor</Label>
               <Input
                 type="number"
                 min="0"
@@ -3016,7 +3016,7 @@ function DinamicaForm({
                 onChange={(e) => setValorPorVoto(e.target.value)}
               />
               <p className="mt-1 text-xs text-slate-400">
-                Pontos do vencedor = nº de votos × este valor.
+                O grupo mais votado recebe este valor (fixo).
               </p>
             </div>
           </div>

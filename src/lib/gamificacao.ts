@@ -236,14 +236,15 @@ export async function recomputarClassificacaoGrito(
   const valorPorVoto = dinamica?.valorPorVoto ?? 10;
 
   // Só o vencedor pontua: apaga todas as classificações da dinâmica e, havendo
-  // vencedor único, grava-lhe os pontos (nº de votos × valorPorVoto).
+  // vencedor único, grava-lhe os pontos = `valorPorVoto` (valor fixo ao
+  // vencedor; NÃO se multiplica pelo nº de votos).
   const opVencedor = apuramento.vencedorEquipaId
     ? [
         prisma.classificacao.create({
           data: {
             dinamicaId,
             equipaId: apuramento.vencedorEquipaId,
-            pontos: Math.round(apuramento.maxVotos * valorPorVoto * 100) / 100,
+            pontos: valorPorVoto,
           },
         }),
       ]
