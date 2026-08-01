@@ -101,6 +101,9 @@ type Dinamica = {
   bonusRapidezMax: number;
   tempoLimiteSeg: number | null;
   valorPorVoto: number;
+  valorTesouro: number;
+  tesouroVencedorEquipaId: string | null;
+  tesouroVencedor: { id: string; nome: string; cor: string } | null;
   classificacoes: Classificacao[];
   perguntas: QuizPergunta[];
   submissoes: QuizSubmissao[];
@@ -986,12 +989,15 @@ function DinamicasTab({
                   )}
                   {d.tipo === "tesouro" && (
                     <p className="mt-0.5 text-xs text-slate-400">
-                      {d.cartoesTesouro.filter((c) => c.introduzidoEm).length}/
-                      {d.cartoesTesouro.length} código
-                      {d.cartoesTesouro.length === 1 ? "" : "s"} introduzido
-                      {d.cartoesTesouro.filter((c) => c.introduzidoEm).length === 1
-                        ? ""
-                        : "s"}
+                      {d.cartoesTesouro.length} bloco
+                      {d.cartoesTesouro.length === 1 ? "" : "s"} ·{" "}
+                      {d.tesouroVencedor ? (
+                        <span className="font-medium text-green-600">
+                          aberto por {d.tesouroVencedor.nome}
+                        </span>
+                      ) : (
+                        <span>por abrir · {nf(d.valorTesouro)} pt ao vencedor</span>
+                      )}
                     </p>
                   )}
                   {d.tipo === "grito" && (
@@ -1086,7 +1092,13 @@ function DinamicasTab({
           onChange={onChange}
         />
       )}
-      {bau && <BauProjecao dinamica={bau} onClose={() => setBau(null)} />}
+      {bau && (
+        <BauProjecao
+          dinamica={bau}
+          onClose={() => setBau(null)}
+          onChange={onChange}
+        />
+      )}
     </div>
   );
 }
@@ -1833,58 +1845,85 @@ function GritoControloModal({
 
 /* ============ Baú da Caça ao Tesouro (projeção do desbloqueio) ========= */
 
+type EquipaMini = { id: string; nome: string; cor: string };
+type TentativaAdmin = {
+  id: string;
+  combinacao: string;
+  correta: boolean;
+  createdAt: string;
+  equipa: EquipaMini;
+};
+
 function BauProjecao({
   dinamica,
   onClose,
+  onChange,
 }: {
   dinamica: Dinamica;
   onClose: () => void;
+  onChange: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [fs, setFs] = useState(false);
-
-  // Cada cartão é um bloco da chave (ex.: "A1"). A ordem é a do editor.
-  const blocos = useMemo(
-    () =>
-      dinamica.cartoesTesouro
-        .map((c) => ({
-          id: c.id,
-          resposta: (c.codigo || "").toUpperCase().replace(/\s+/g, ""),
-          etiqueta: c.etiqueta,
-        }))
-        .filter((b) => b.resposta.length > 0),
-    [dinamica.cartoesTesouro]
+  const [qr, setQr] = useState("");
+  const [tentativas, setTentativas] = useState<TentativaAdmin[]>([]);
+  const [vencedor, setVencedor] = useState<EquipaMini | null>(
+    dinamica.tesouroVencedor ?? null
   );
+  const [repondo, setRepondo] = useState(false);
+  const [confirmarRepor, setConfirmarRepor] = useState(false);
 
-  const [valores, setValores] = useState<string[]>(() =>
-    blocos.map(() => "")
-  );
-  const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
-  const [aberto, setAberto] = useState(false);
-  // Estado de "chave errada" (feedback só depois de tudo preenchido).
-  const [errado, setErrado] = useState(false);
+  // O baú abre em função do estado do SERVIDOR (a 1ª equipa a acertar).
+  const aberto = !!vencedor;
 
-  // Sem pistas por bloco: só se sabe se está preenchido, não se está certo.
-  const nPreenchidos = blocos.filter(
-    (b, i) => (valores[i] ?? "").length === b.resposta.length
-  ).length;
-  const todosPreenchidos = blocos.length > 0 && nPreenchidos === blocos.length;
-  const todosCertos =
-    blocos.length > 0 &&
-    blocos.every((b, i) => (valores[i] ?? "").toUpperCase() === b.resposta);
+  const url =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/t/${dinamica.id}`
+      : `/t/${dinamica.id}`;
 
-  // Só quando TODOS os blocos estão preenchidos é que se avalia a chave:
-  // certa → abre; errada → treme a vermelho e deixa corrigir.
   useEffect(() => {
-    if (!todosPreenchidos || aberto) return;
-    if (todosCertos) {
-      const t = setTimeout(() => setAberto(true), 300);
-      return () => clearTimeout(t);
+    QRCode.toDataURL(url, { width: 1024, margin: 1 })
+      .then(setQr)
+      .catch(() => setQr(""));
+  }, [url]);
+
+  const carregar = useCallback(async () => {
+    try {
+      const d = await api<{
+        vencedor: EquipaMini | null;
+        tentativas: TentativaAdmin[];
+      }>(`/api/gamificacao/dinamicas/${dinamica.id}/tesouro`);
+      setTentativas(d.tentativas);
+      setVencedor(d.vencedor);
+    } catch {
+      /* ignora falhas de polling */
     }
-    setErrado(true);
-    const t = setTimeout(() => setErrado(false), 1500);
-    return () => clearTimeout(t);
-  }, [todosPreenchidos, todosCertos, aberto]);
+  }, [dinamica.id]);
+
+  useEffect(() => {
+    carregar();
+    const t = setInterval(carregar, 3000);
+    return () => clearInterval(t);
+  }, [carregar]);
+
+  async function repor() {
+    setRepondo(true);
+    try {
+      await api(`/api/gamificacao/dinamicas/${dinamica.id}/tesouro`, {
+        method: "DELETE",
+      });
+      setVencedor(null);
+      setTentativas([]);
+      await carregar();
+      onChange();
+      toast.success("Baú reposto");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRepondo(false);
+      setConfirmarRepor(false);
+    }
+  }
 
   // Som de desbloqueio (sintetizado — sem ficheiros): clunk do cadeado +
   // arpejo dourado + brilho. Toca sempre que o baú passa a aberto.
@@ -2002,12 +2041,6 @@ function BauProjecao({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Foca o primeiro bloco ao abrir o ecrã.
-  useEffect(() => {
-    const t = setTimeout(() => inputsRef.current[0]?.focus(), 200);
-    return () => clearTimeout(t);
-  }, []);
-
   async function toggleFs() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -2015,25 +2048,6 @@ function BauProjecao({
     } catch {
       /* alguns browsers bloqueiam sem gesto — ignora */
     }
-  }
-
-  function setBloco(i: number, v: string) {
-    const b = blocos[i];
-    const nv = v
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "")
-      .slice(0, b.resposta.length);
-    setValores((vals) => vals.map((x, idx) => (idx === i ? nv : x)));
-    if (errado) setErrado(false);
-    // Ao encher o bloco, avança para o seguinte (sem revelar se está certo).
-    if (nv.length === b.resposta.length) inputsRef.current[i + 1]?.focus();
-  }
-
-  function reiniciar() {
-    setAberto(false);
-    setErrado(false);
-    setValores(blocos.map(() => ""));
-    setTimeout(() => inputsRef.current[0]?.focus(), 60);
   }
 
   return (
@@ -2139,7 +2153,7 @@ function BauProjecao({
           </div>
           {/* Cadeado intacto (só fechado) */}
           {!aberto && (
-            <div className={`bau-cadeado ${errado ? "nega" : ""}`}>
+            <div className="bau-cadeado">
               <Lock className="h-6 w-6" />
             </div>
           )}
@@ -2185,91 +2199,118 @@ function BauProjecao({
         </div>
       </div>
 
-      {/* Painel de estado / chave */}
-      <div className="z-10 mt-8 w-full max-w-2xl text-center">
-        {blocos.length === 0 ? (
-          <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-amber-200">
-            Esta dinâmica ainda não tem blocos. Edita a dinâmica e adiciona os
-            cartões (ex.: A1, B2, …) que compõem a chave.
-          </p>
-        ) : aberto ? (
-          <div className="bau-vitoria">
-            <p className="flex items-center justify-center gap-2 text-2xl font-black text-amber-300 sm:text-4xl">
-              <Trophy className="h-8 w-8" /> Baú desbloqueado!
+      {/* Painel: QR + feed de tentativas (ou vencedor) */}
+      <div className="z-10 mt-6 w-full max-w-3xl px-2">
+        {aberto && vencedor ? (
+          <div className="bau-vitoria mb-5 text-center">
+            <p className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-[0.3em] text-amber-300/80">
+              <Trophy className="h-5 w-5" /> Vencedor
             </p>
-            <p className="mt-2 text-amber-100/80">
-              A chave estava certa. Atribui a pontuação manualmente na aba
-              “Lançar pontos”.
+            <h2 className="bau-vencedor mt-1" style={{ color: vencedor.cor }}>
+              {vencedor.nome}
+            </h2>
+            <p className="mt-2 text-amber-100/70">
+              Abriram o baú — +{nf(dinamica.valorTesouro)} pontos!
             </p>
-            <button
-              onClick={reiniciar}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-amber-100 backdrop-blur transition hover:bg-white/20"
-            >
-              <RotateCcw className="h-4 w-4" /> Voltar a fechar
-            </button>
           </div>
         ) : (
-          <>
-            <p className="mb-1 flex items-center justify-center gap-2 text-sm font-semibold uppercase tracking-widest text-amber-200/80">
-              <KeyRound className="h-4 w-4" /> Insere a chave de desbloqueio
+          <div className="mb-5 flex flex-col items-center gap-2">
+            {qr ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={qr}
+                alt="QR Code do baú"
+                className="h-40 w-40 rounded-xl border border-amber-200/20 bg-white p-1.5"
+              />
+            ) : (
+              <div className="flex h-40 w-40 items-center justify-center rounded-xl border border-amber-200/20 text-amber-200/40">
+                <QrCode className="h-10 w-10" />
+              </div>
+            )}
+            <p className="max-w-sm text-center text-sm text-amber-100/70">
+              Lê o QR Code, escolhe o teu grupo e insere a combinação que
+              descobriram para tentar abrir o baú.
             </p>
-            <p
-              className={`mb-4 text-xs ${
-                errado ? "font-semibold text-red-400" : "text-amber-100/50"
-              }`}
-            >
-              {errado
-                ? "Chave incorreta — verifica os blocos e tenta de novo."
-                : `${nPreenchidos} / ${blocos.length} blocos preenchidos`}
+          </div>
+        )}
+
+        {/* Feed de tentativas ao vivo */}
+        <div className="mx-auto max-w-xl">
+          <p className="mb-2 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-200/70">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+            </span>
+            Tentativas ({tentativas.length})
+          </p>
+          {tentativas.length === 0 ? (
+            <p className="rounded-lg bg-white/5 px-3 py-3 text-center text-sm text-amber-100/40">
+              Ainda sem tentativas. Aguardem as equipas…
             </p>
-            <div className="flex flex-wrap items-start justify-center gap-2.5">
-              {blocos.map((b, i) => {
-                const cheio = (valores[i] ?? "").length === b.resposta.length;
-                return (
-                  <div key={b.id} className="flex flex-col items-center gap-1">
-                    <input
-                      ref={(el) => {
-                        inputsRef.current[i] = el;
-                      }}
-                      value={valores[i] ?? ""}
-                      onChange={(e) => setBloco(i, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (
-                          e.key === "Backspace" &&
-                          !(valores[i] ?? "") &&
-                          i > 0
-                        ) {
-                          inputsRef.current[i - 1]?.focus();
-                        }
-                      }}
-                      maxLength={b.resposta.length}
-                      inputMode="text"
-                      autoComplete="off"
-                      spellCheck={false}
-                      aria-label={`Bloco ${i + 1}`}
-                      className={`bau-bloco ${cheio ? "cheio" : ""} ${
-                        errado ? "err" : ""
-                      }`}
-                      style={{ width: `${Math.max(3, b.resposta.length + 1.5)}ch` }}
-                    />
-                    <span className="max-w-[6rem] truncate text-[10px] uppercase tracking-wide text-amber-100/40">
-                      {b.etiqueta || `Bloco ${i + 1}`}
-                    </span>
-                  </div>
-                );
-              })}
+          ) : (
+            <div className="max-h-44 space-y-1.5 overflow-y-auto">
+              {tentativas.map((t) => (
+                <div
+                  key={t.id}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
+                    t.correta ? "bg-green-400/15" : "bg-white/5"
+                  }`}
+                >
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: t.equipa.cor }}
+                  />
+                  <span className="shrink-0 font-semibold text-amber-50">
+                    {t.equipa.nome}
+                  </span>
+                  <span className="truncate font-mono tracking-widest text-amber-100/60">
+                    {t.combinacao}
+                  </span>
+                  <span className="ml-auto shrink-0">
+                    {t.correta ? (
+                      <Check className="h-4 w-4 text-green-400" />
+                    ) : (
+                      <X className="h-4 w-4 text-red-400/70" />
+                    )}
+                  </span>
+                </div>
+              ))}
             </div>
-          </>
+          )}
+        </div>
+      </div>
+
+      {/* Controlos inferiores */}
+      <div className="z-10 mt-6 flex flex-wrap items-center justify-center gap-2">
+        {!fs && (
+          <button
+            onClick={toggleFs}
+            className="inline-flex items-center gap-2 rounded-full bg-amber-500/90 px-5 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-400"
+          >
+            <Maximize className="h-4 w-4" /> Entrar em ecrã cheio
+          </button>
+        )}
+        {aberto && (
+          <button
+            onClick={() => setConfirmarRepor(true)}
+            disabled={repondo}
+            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-amber-100 backdrop-blur transition hover:bg-white/20 disabled:opacity-50"
+          >
+            <RotateCcw className="h-4 w-4" /> Repor baú
+          </button>
         )}
       </div>
 
-      {!fs && blocos.length > 0 && (
-        <button
-          onClick={toggleFs}
-          className="z-10 mt-6 inline-flex items-center gap-2 rounded-full bg-amber-500/90 px-5 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-400"
-        >
-          <Maximize className="h-4 w-4" /> Entrar em ecrã cheio
-        </button>
+      {confirmarRepor && (
+        <ConfirmDialog
+          title="Repor o baú?"
+          message="Vais apagar o vencedor, as tentativas e a pontuação atribuída, para jogar outra ronda. Esta acção não pode ser anulada."
+          confirmLabel="Repor"
+          danger
+          busy={repondo}
+          onConfirm={repor}
+          onCancel={() => setConfirmarRepor(false)}
+        />
       )}
 
       <style>{`
@@ -2491,6 +2532,20 @@ function BauProjecao({
         }
         .bau-vitoria { animation: bau-aparece .6s ease both .2s; }
         @keyframes bau-aparece { from { opacity: 0; transform: translateY(10px);} to { opacity:1; transform: none;} }
+
+        /* Nome do vencedor em letras garrafais (na cor da equipa) */
+        .bau-vencedor {
+          font-weight: 900; line-height: .95; letter-spacing: -0.02em;
+          font-size: clamp(2.75rem, 12vw, 8rem);
+          text-transform: uppercase;
+          text-shadow: 0 0 42px currentColor, 0 6px 34px rgba(0,0,0,.55);
+          animation: bau-vencedor-in .7s cubic-bezier(.2,1.5,.4,1) both;
+        }
+        @keyframes bau-vencedor-in {
+          0% { opacity: 0; transform: scale(.6); }
+          60% { opacity: 1; }
+          100% { opacity: 1; transform: scale(1); }
+        }
       `}</style>
     </div>
   );
@@ -2644,6 +2699,9 @@ function DinamicaForm({
   const [valorPorVoto, setValorPorVoto] = useState(
     String(dinamica?.valorPorVoto ?? 10)
   );
+  const [valorTesouro, setValorTesouro] = useState(
+    String(dinamica?.valorTesouro ?? 50)
+  );
   const [bonusRapidezMax, setBonusRapidezMax] = useState(
     String(dinamica?.bonusRapidezMax ?? 20)
   );
@@ -2715,6 +2773,7 @@ function DinamicaForm({
               .map((o) => ({ texto: o.texto.trim(), correta: o.correta })),
           }));
       } else if (tipo === "tesouro") {
+        payload.valorTesouro = Number(valorTesouro) || 50;
         payload.cartoes = cartoes
           .filter((c) => c.codigo.trim())
           .map((c) => ({
@@ -3060,11 +3119,23 @@ function DinamicaForm({
         {tipo === "tesouro" && (
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             <p className="text-xs text-slate-500">
-              Cada cartão tem um código alfanumérico. Distribui os cartões
-              (físicos) pelos envelopes das equipas. O baú abre quando{" "}
-              <strong>todos</strong> os códigos forem introduzidos na app. A
-              etiqueta e o envelope são opcionais (só para te organizares).
+              Cada cartão é um <strong>bloco da chave</strong> (ex.: A1, B2, …).
+              As equipas reúnem os blocos e, pelo QR, inserem a combinação
+              completa — <strong>pela ordem em que os cartões estão aqui</strong>.
+              A <strong>1ª equipa a acertar</strong> abre o baú e ganha os pontos.
+              Etiqueta e envelope são opcionais (para te organizares).
             </p>
+
+            <div className="max-w-[12rem]">
+              <Label className="mb-1 block text-xs">Pontos ao vencedor</Label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={valorTesouro}
+                onChange={(e) => setValorTesouro(e.target.value)}
+              />
+            </div>
 
             <div className="space-y-2">
               {cartoes.map((c, ci) => (
@@ -3165,7 +3236,8 @@ function PontosTab({
   // Todas as dinâmicas aparecem na grelha. As manuais são editáveis; as de quiz
   // e grito entram só para leitura (pontuadas automaticamente pelas respostas /
   // votos), para se ver o contributo delas no total por equipa.
-  const ehAuto = (t: string) => t === "quiz" || t === "grito";
+  const ehAuto = (t: string) =>
+    t === "quiz" || t === "grito" || t === "tesouro";
   const todas = useMemo(() => evento.dinamicas, [evento]);
   const manuais = useMemo(
     () => todas.filter((d) => !ehAuto(d.tipo)),
@@ -3302,6 +3374,7 @@ function PontosTab({
               {todas.map((d) => {
                 const auto = ehAuto(d.tipo);
                 const ehGrito = d.tipo === "grito";
+                const ehTesouro = d.tipo === "tesouro";
                 return (
                   <tr key={d.id} className="border-t border-slate-100">
                     <td className="sticky left-0 z-10 bg-white px-3 py-2">
@@ -3312,6 +3385,10 @@ function PontosTab({
                             {ehGrito ? (
                               <>
                                 <Megaphone className="mr-1 h-3 w-3" /> grito
+                              </>
+                            ) : ehTesouro ? (
+                              <>
+                                <KeyRound className="mr-1 h-3 w-3" /> tesouro
                               </>
                             ) : (
                               <>
@@ -3325,7 +3402,9 @@ function PontosTab({
                         <div className="text-xs text-slate-400">
                           {ehGrito
                             ? "automático (pelos votos)"
-                            : "automático (pelas respostas)"}
+                            : ehTesouro
+                              ? "automático (pelo vencedor)"
+                              : "automático (pelas respostas)"}
                           {d.peso !== 1 ? ` · ×${nf(d.peso)}` : ""}
                         </div>
                       ) : (

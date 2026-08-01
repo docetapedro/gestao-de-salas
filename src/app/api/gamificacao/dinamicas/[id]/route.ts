@@ -33,6 +33,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
       valorPorVoto = Number.isFinite(vpv) && vpv >= 0 ? vpv : 10;
     }
 
+    let valorTesouro: number | undefined;
+    if (body.valorTesouro !== undefined) {
+      const vt = Number(body.valorTesouro);
+      valorTesouro = Number.isFinite(vt) && vt >= 0 ? vt : 50;
+    }
+
     const dinamica = await prisma.dinamica.update({
       where: { id },
       data: {
@@ -60,6 +66,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
           body.quizAberto !== undefined ? Boolean(body.quizAberto) : undefined,
         ...(cfg ?? {}),
         valorPorVoto,
+        valorTesouro,
       },
     });
 

@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
     const cfg = lerConfigQuiz(body);
     const vpv = Number(body.valorPorVoto);
     const valorPorVoto = Number.isFinite(vpv) && vpv >= 0 ? vpv : 10;
+    const vt = Number(body.valorTesouro);
+    const valorTesouro = Number.isFinite(vt) && vt >= 0 ? vt : 50;
 
     const dinamica = await prisma.dinamica.create({
       data: {
@@ -43,6 +45,7 @@ export async function POST(req: NextRequest) {
         tipo,
         ...cfg,
         valorPorVoto,
+        valorTesouro,
       },
     });
 

@@ -366,6 +366,8 @@ model Equipa {
   cartoesIntroduzidos TesouroCartao[] @relation("CartaoIntroduzidoPor")
   votosDados     GritoVoto[] @relation("VotanteEquipa")
   votosRecebidos GritoVoto[] @relation("VotadaEquipa")
+  tesourosVencidos  Dinamica[] @relation("TesouroVencedor")
+  tesouroTentativas TesouroTentativa[]
 
   @@index([eventoId])
 }
@@ -405,16 +407,23 @@ model Dinamica {
   // ---- Configuração específica do Grito de Guerra (votação) ----
   // `quizAberto` (acima) é reutilizado como "aberto a votos".
   valorPorVoto    Float   @default(10) // pontos por voto recebido; só o vencedor pontua
+  // ---- Configuração/estado da Caça ao Tesouro (jogo por equipa) ----
+  valorTesouro            Float     @default(50) // pontos à equipa que abrir o baú
+  tesouroVencedorEquipaId String?
+  tesouroVencedor         Equipa?   @relation("TesouroVencedor", fields: [tesouroVencedorEquipaId], references: [id], onDelete: SetNull)
+  tesouroAbertoEm         DateTime?
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
-  classificacoes Classificacao[]
-  perguntas      QuizPergunta[]
-  submissoes     QuizSubmissao[]
-  cartoesTesouro TesouroCartao[]
-  votos          GritoVoto[]
+  classificacoes    Classificacao[]
+  perguntas         QuizPergunta[]
+  submissoes        QuizSubmissao[]
+  cartoesTesouro    TesouroCartao[]
+  votos             GritoVoto[]
+  tesouroTentativas TesouroTentativa[]
 
   @@index([eventoId])
+  @@index([tesouroVencedorEquipaId])
 }
 
 // Pontuação de uma equipa numa dinâmica (um registo por equipa/dinâmica).
@@ -528,4 +537,22 @@ model GritoVoto {
   @@index([dinamicaId])
   @@index([votanteEquipaId])
   @@index([votadaEquipaId])
+}
+
+// Tentativa de uma equipa para abrir o baú (Caça ao Tesouro por equipa).
+// Guarda a combinação submetida e se estava certa — alimenta o feed de
+// tentativas ao vivo na projeção. O vencedor (1º a acertar) fica gravado em
+// Dinamica.tesouroVencedor (first-wins atómico).
+model TesouroTentativa {
+  id         String   @id @default(cuid())
+  dinamicaId String
+  dinamica   Dinamica @relation(fields: [dinamicaId], references: [id], onDelete: Cascade)
+  equipaId   String
+  equipa     Equipa   @relation(fields: [equipaId], references: [id], onDelete: Cascade)
+  combinacao String
+  correta    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([dinamicaId])
+  @@index([equipaId])
 }
