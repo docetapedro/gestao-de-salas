@@ -114,7 +114,7 @@ export default function RankingProjecaoPage({
   const resto = ranking.slice(3);
   // Ordem visual do pódio: 2º, 1º, 3º.
   const podio = [top3[1], top3[0], top3[2]].filter(Boolean) as LinhaRanking[];
-  const alturas: Record<number, string> = { 1: "h-52", 2: "h-40", 3: "h-32" };
+  const alturas: Record<number, string> = { 1: "h-40", 2: "h-32", 3: "h-24" };
   const maxResto = Math.max(1, ...resto.map((r) => r.total));
 
   return (
@@ -250,42 +250,60 @@ export default function RankingProjecaoPage({
               })}
             </div>
 
-            {/* RESTANTES — ocupam todo o espaço restante (sem scroll prematuro) */}
+            {/* RESTANTES — ocupam o espaço restante; em 2 colunas quando há
+                muitas equipas (leitura top-down por coluna), sem scroll. */}
             {resto.length > 0 && (
-              <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center gap-2 overflow-y-auto pr-1">
-                {resto.map((r) => (
-                  <div
-                    key={r.equipaId}
-                    className="flex shrink-0 items-center gap-3 rounded-xl bg-white/5 px-4 py-2.5 backdrop-blur"
-                  >
-                    <span className="w-8 text-center text-lg font-bold text-brand-200">
-                      {r.posicao}º
-                    </span>
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                      style={{ background: r.cor }}
+              <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col justify-center overflow-y-auto pr-1">
+                <div
+                  className={
+                    resto.length > 4
+                      ? "grid grid-flow-col gap-x-5 gap-y-2"
+                      : "grid grid-cols-1 gap-2"
+                  }
+                  style={
+                    resto.length > 4
+                      ? {
+                          gridTemplateRows: `repeat(${Math.ceil(
+                            resto.length / 2
+                          )}, auto)`,
+                        }
+                      : undefined
+                  }
+                >
+                  {resto.map((r) => (
+                    <div
+                      key={r.equipaId}
+                      className="flex items-center gap-3 rounded-xl bg-white/5 px-3.5 py-2 backdrop-blur"
                     >
-                      {r.nome.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="truncate font-semibold">{r.nome}</span>
-                        <span className="shrink-0 text-lg font-black">
-                          <Pontos total={r.total} />
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${(r.total / maxResto) * 100}%`,
-                            background: r.cor,
-                          }}
-                        />
+                      <span className="w-7 text-center text-base font-bold text-brand-200">
+                        {r.posicao}º
+                      </span>
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                        style={{ background: r.cor }}
+                      >
+                        {r.nome.slice(0, 2).toUpperCase()}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="truncate font-semibold">{r.nome}</span>
+                          <span className="shrink-0 text-lg font-black">
+                            <Pontos total={r.total} />
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${(r.total / maxResto) * 100}%`,
+                              background: r.cor,
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
