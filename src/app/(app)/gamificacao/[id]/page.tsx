@@ -40,6 +40,7 @@ import {
   Radio,
   RotateCcw,
   Save,
+  Search,
   Sparkles,
   Timer,
   Trash2,
@@ -548,6 +549,7 @@ function ParticipantesTab({
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [confirmarLote, setConfirmarLote] = useState(false);
   const [eliminandoLote, setEliminandoLote] = useState(false);
+  const [busca, setBusca] = useState("");
 
   // Todos os participantes: os já em equipas + os que estão na "pool".
   const participantes = useMemo(() => {
@@ -570,14 +572,26 @@ function ParticipantesTab({
 
   const totalSemEquipa = evento.membros.length;
 
-  // Selecção múltipla (para eliminar em lote). Só conta ids ainda existentes.
+  // Pesquisa por nome (ignora maiúsculas e acentos).
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "");
+  const filtrados = useMemo(() => {
+    const q = norm(busca.trim());
+    if (!q) return participantes;
+    return participantes.filter((p) => norm(p.nome).includes(q));
+  }, [participantes, busca]);
+
+  // Selecção múltipla (eliminar em lote) — sobre os participantes VISÍVEIS.
   const idsSelecionados = useMemo(
-    () => participantes.map((p) => p.id).filter((id) => selecionados.has(id)),
-    [participantes, selecionados]
+    () => filtrados.map((p) => p.id).filter((id) => selecionados.has(id)),
+    [filtrados, selecionados]
   );
   const nSelecionados = idsSelecionados.length;
   const todosSelecionados =
-    participantes.length > 0 && nSelecionados === participantes.length;
+    filtrados.length > 0 && nSelecionados === filtrados.length;
 
   function alternarUm(id: string) {
     setSelecionados((prev) => {
@@ -589,9 +603,12 @@ function ParticipantesTab({
   }
 
   function alternarTodos() {
-    setSelecionados(
-      todosSelecionados ? new Set() : new Set(participantes.map((p) => p.id))
-    );
+    setSelecionados((prev) => {
+      const s = new Set(prev);
+      if (todosSelecionados) filtrados.forEach((p) => s.delete(p.id));
+      else filtrados.forEach((p) => s.add(p.id));
+      return s;
+    });
   }
 
   async function adicionar() {
@@ -727,7 +744,7 @@ function ParticipantesTab({
                   variant="outline"
                   size="sm"
                   onClick={alternarTodos}
-                  disabled={participantes.length === 0}
+                  disabled={filtrados.length === 0}
                 >
                   {todosSelecionados ? "Desmarcar todos" : "Selecionar todos"}
                 </Button>
@@ -744,6 +761,27 @@ function ParticipantesTab({
               </div>
             </div>
 
+            {/* Pesquisa por nome */}
+            <div className="relative mb-3">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Pesquisar participante…"
+                className="h-9 pl-9 pr-9"
+              />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  title="Limpar pesquisa"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
             {evento.equipas.length === 0 && (
               <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
                 Ainda não há equipas. Cria equipas na aba “Equipas” para poderes
@@ -752,7 +790,12 @@ function ParticipantesTab({
             )}
 
             <div className="space-y-1.5">
-              {participantes.map((p) => (
+              {filtrados.length === 0 ? (
+                <p className="px-3 py-6 text-center text-sm text-slate-400">
+                  Nenhum participante corresponde a “{busca}”.
+                </p>
+              ) : (
+                filtrados.map((p) => (
                 <div
                   key={p.id}
                   className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
@@ -794,7 +837,8 @@ function ParticipantesTab({
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
