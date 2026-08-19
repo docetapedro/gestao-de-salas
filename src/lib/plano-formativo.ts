@@ -53,6 +53,36 @@ export const PRIORIDADES = ["Alta", "Média", "Baixa"] as const;
 export const COMPETENCIAS = ["Técnica", "Comportamental", "Evento"] as const;
 export const TIPOS_ACCAO = ["Treinamento", "Certificação", "Evento"] as const;
 export const MODALIDADES = ["Presencial", "Online", "Híbrido"] as const;
+export const TURNOS = ["Manhã", "Tarde"] as const;
+
+export const MESES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+export const MESES_CURTO = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+];
+
+// Trimestres (meses 0-indexados).
+export const TRIMESTRES: { value: number; label: string; meses: number[] }[] = [
+  { value: 1, label: "1º Trimestre (Jan–Mar)", meses: [0, 1, 2] },
+  { value: 2, label: "2º Trimestre (Abr–Jun)", meses: [3, 4, 5] },
+  { value: 3, label: "3º Trimestre (Jul–Set)", meses: [6, 7, 8] },
+  { value: 4, label: "4º Trimestre (Out–Dez)", meses: [9, 10, 11] },
+];
+
+/** Trimestre (1-4) de um mês 0-indexado. */
+export function trimestreDoMes(mes: number): number {
+  return Math.floor(mes / 3) + 1;
+}
+
+/**
+ * Natureza da formação para a visão trimestral: "Transversal" (comportamental/
+ * evento) ou "Tech" (técnica). Serve para os totais por natureza.
+ */
+export function naturezaFormacao(competencia: string | null): "Transversal" | "Tech" {
+  return (competencia ?? "").toLowerCase().startsWith("téc") ? "Tech" : "Transversal";
+}
 
 /** Remove acentos e baixa a caixa — para pesquisa por nome que ignora acentos. */
 export function normalizar(s: string): string {

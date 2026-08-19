@@ -17,6 +17,11 @@ function str(v: unknown): string | null {
   const s = String(v).trim();
   return s === "" ? null : s;
 }
+function num(v: unknown): number | null {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
@@ -35,6 +40,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         formador: body.formador !== undefined ? str(body.formador) : undefined,
         local: body.local !== undefined ? str(body.local) : undefined,
         modalidade: body.modalidade !== undefined ? str(body.modalidade) : undefined,
+        duracaoHoras: body.duracaoHoras !== undefined ? num(body.duracaoHoras) : undefined,
+        turno: body.turno !== undefined ? str(body.turno) : undefined,
         dataInicio: body.dataInicio !== undefined ? parseDate(body.dataInicio) : undefined,
         dataFim: body.dataFim !== undefined ? parseDate(body.dataFim) : undefined,
         notas: body.notas !== undefined ? str(body.notas) : undefined,

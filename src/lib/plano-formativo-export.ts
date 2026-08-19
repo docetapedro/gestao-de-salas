@@ -20,6 +20,8 @@ type TurmaLite = {
   formador: string | null;
   local: string | null;
   modalidade: string | null;
+  duracaoHoras?: number | null;
+  turno?: string | null;
   dataInicio: Date | null;
   dataFim: Date | null;
 } | null;
@@ -237,6 +239,8 @@ export async function buildPlanoFormativoWorkbook(
     { header: "FORMADOR", key: "formador", width: 22 },
     { header: "LOCAL", key: "local", width: 20 },
     { header: "MODALIDADE", key: "modalidade", width: 14 },
+    { header: "CARGA HORÁRIA", key: "carga", width: 14 },
+    { header: "TURNO", key: "turno", width: 10 },
     { header: "INÍCIO", key: "inicio", width: 12 },
     { header: "FIM", key: "fim", width: 12 },
     { header: "Nº FORMANDOS", key: "formandos", width: 14 },
@@ -251,6 +255,8 @@ export async function buildPlanoFormativoWorkbook(
         formador: t.formador,
         local: t.local,
         modalidade: t.modalidade,
+        carga: t.duracaoHoras ?? null,
+        turno: t.turno ?? null,
         inicio: t.dataInicio,
         fim: t.dataFim,
         formandos: t._count.inscricoes,
@@ -261,7 +267,7 @@ export async function buildPlanoFormativoWorkbook(
   turmas.getColumn("inicio").numFmt = DATE_FMT;
   turmas.getColumn("fim").numFmt = DATE_FMT;
   if (turmas.rowCount > 1)
-    turmas.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 10 } };
+    turmas.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 12 } };
 
   /* -------------------- Uma folha por formação -------------------------- */
   // Inscrições agrupadas por nome de formação (o nome é único no catálogo).

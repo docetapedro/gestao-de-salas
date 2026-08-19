@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
       formador: true,
       local: true,
       modalidade: true,
+      duracaoHoras: true,
+      turno: true,
       dataInicio: true,
       dataFim: true,
     };

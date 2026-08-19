@@ -629,13 +629,15 @@ model PfTurma {
   estado     String     @default("PLANEADO")
   entidade   String? // fornecedor / plataforma (ex.: "Plataforma Alura", "Microsoft")
   formador   String? // nome do formador
-  local      String? // sala / local
-  modalidade String? // Presencial | Online | Híbrido
-  dataInicio DateTime?
-  dataFim    DateTime?
-  notas      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  local        String? // sala / local
+  modalidade   String? // Presencial | Online | Híbrido
+  duracaoHoras Float? // carga horária (ex.: 12)
+  turno        String? // Manhã | Tarde
+  dataInicio   DateTime?
+  dataFim      DateTime?
+  notas        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   inscricoes PfInscricao[]
 

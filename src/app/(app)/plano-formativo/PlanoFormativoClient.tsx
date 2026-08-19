@@ -41,6 +41,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   Users,
 } from "lucide-react";
 import {
@@ -52,6 +53,11 @@ import {
   COMPETENCIAS,
   TIPOS_ACCAO,
   MODALIDADES,
+  TURNOS,
+  TRIMESTRES,
+  MESES_CURTO,
+  trimestreDoMes,
+  naturezaFormacao,
   normalizar,
   type EstadoTurma,
 } from "@/lib/plano-formativo";
@@ -90,6 +96,8 @@ type Turma = {
   formador: string | null;
   local: string | null;
   modalidade: string | null;
+  duracaoHoras: number | null;
+  turno: string | null;
   dataInicio: string | null;
   dataFim: string | null;
   notas: string | null;
@@ -116,6 +124,7 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [novoAno, setNovoAno] = useState(false);
+  const [importar, setImportar] = useState(false);
 
   async function reload(targetAno?: number | null) {
     try {
@@ -186,6 +195,11 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
               <FileDown className="h-4 w-4" /> Baixar template
             </a>
           </Button>
+          {canManage && planoId && (
+            <Button variant="outline" onClick={() => setImportar(true)}>
+              <Upload className="h-4 w-4" /> Importar template
+            </Button>
+          )}
           {planoId && (
             <Button variant="outline" asChild>
               <a href={`/api/plano-formativo/export?ano=${ano}`} download>
@@ -201,6 +215,7 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
           <TabsList>
             <TabsTrigger value="plano">Plano geral</TabsTrigger>
             <TabsTrigger value="turmas">Formações &amp; Turmas</TabsTrigger>
+            <TabsTrigger value="trimestre">Trimestre</TabsTrigger>
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
           </TabsList>
 
@@ -222,6 +237,10 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
               planoId={planoId}
               onChanged={() => reload(ano)}
             />
+          </TabsContent>
+
+          <TabsContent value="trimestre">
+            <VisaoTrimestral formacoes={formacoes} ano={ano} />
           </TabsContent>
 
           <TabsContent value="resumo">
@@ -248,6 +267,18 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
           onSaved={(a) => {
             setNovoAno(false);
             reload(a);
+          }}
+        />
+      )}
+
+      {importar && planoId && (
+        <ImportarTemplateDialog
+          planoId={planoId}
+          ano={ano}
+          onClose={() => setImportar(false)}
+          onDone={() => {
+            setImportar(false);
+            reload(ano);
           }}
         />
       )}
@@ -600,6 +631,10 @@ function FormacoesTurmas({
                           <div>Formador: {t.formador || "—"}</div>
                           <div>Local: {t.local || "—"}</div>
                           <div>
+                            Carga/Turno: {t.duracaoHoras != null ? `${t.duracaoHoras}h` : "—"}
+                            {t.turno ? ` · ${t.turno}` : ""}
+                          </div>
+                          <div>
                             Datas:{" "}
                             {t.dataInicio
                               ? new Date(t.dataInicio).toLocaleDateString("pt-PT")
@@ -779,12 +814,21 @@ function Resumo({
   );
 }
 
-function Kpi({ label, value }: { label: string; value: number }) {
+function Kpi({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: number;
+  sub?: string;
+}) {
   return (
     <Card>
       <CardContent className="py-5">
         <div className="text-3xl font-bold text-navy">{value}</div>
         <div className="text-sm text-slate-500">{label}</div>
+        {sub && <div className="text-xs text-slate-400">{sub}</div>}
       </CardContent>
     </Card>
   );
@@ -815,6 +859,233 @@ function Quebra({ titulo, dados }: { titulo: string; dados: [string, number][] }
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/* ------------------------- Visão Trimestral (Gantt) ---------------------- */
+type TurmaFmt = Turma & { formacaoNome: string; competencia: string | null };
+const BUCKETS: [string, number, number][] = [
+  ["1–7", 1, 7],
+  ["8–14", 8, 14],
+  ["15–21", 15, 21],
+  ["22+", 22, 31],
+];
+const N_COLS = 12; // 3 meses × 4 semanas
+
+function VisaoTrimestral({
+  formacoes,
+  ano,
+}: {
+  formacoes: Formacao[];
+  ano: number | null;
+}) {
+  const [tri, setTri] = useState(() => trimestreDoMes(new Date().getMonth()));
+  const meses = TRIMESTRES[tri - 1].meses;
+
+  const colDe = (mes: number, dia: number) => {
+    const mp = meses.indexOf(mes);
+    if (mp < 0) return -1;
+    const b = dia <= 7 ? 0 : dia <= 14 ? 1 : dia <= 21 ? 2 : 3;
+    return mp * 4 + b;
+  };
+
+  // Turmas do ano: as com data no trimestre entram na grelha; as sem data à parte.
+  const { rows, semData, totais } = useMemo(() => {
+    const noTri: TurmaFmt[] = [];
+    const sem: TurmaFmt[] = [];
+    for (const f of formacoes)
+      for (const t of f.turmas) {
+        const tf: TurmaFmt = { ...t, formacaoNome: f.nome, competencia: f.competencia };
+        if (!t.dataInicio) {
+          sem.push(tf);
+          continue;
+        }
+        const d = new Date(t.dataInicio);
+        if (meses.includes(d.getMonth())) noTri.push(tf);
+      }
+    const map = new Map<string, TurmaFmt[]>();
+    for (const t of noTri) {
+      const a = map.get(t.formacaoNome) ?? [];
+      a.push(t);
+      map.set(t.formacaoNome, a);
+    }
+    const tot = {
+      Transversal: { turmas: 0, formandos: 0 },
+      Tech: { turmas: 0, formandos: 0 },
+    };
+    for (const t of noTri) {
+      const nat = naturezaFormacao(t.competencia);
+      tot[nat].turmas += 1;
+      tot[nat].formandos += t._count.inscricoes;
+    }
+    return { rows: [...map.entries()], semData: sem, totais: tot };
+  }, [formacoes, meses]);
+
+  // Para uma formação, calcula as células cobertas por cada turma (banda).
+  function celulas(turmas: TurmaFmt[]) {
+    const cells: ({ t: TurmaFmt; inicio: boolean } | null)[] = Array(N_COLS).fill(null);
+    for (const t of turmas) {
+      const di = new Date(t.dataInicio!);
+      let ini = colDe(di.getMonth(), di.getDate());
+      if (ini < 0) ini = 0; // começou antes do trimestre
+      let fim = ini;
+      if (t.dataFim) {
+        const df = new Date(t.dataFim);
+        const ec = colDe(df.getMonth(), df.getDate());
+        fim = ec < 0 ? N_COLS - 1 : Math.max(ini, ec);
+      }
+      for (let c = Math.max(0, ini); c <= Math.min(N_COLS - 1, fim); c++)
+        if (!cells[c]) cells[c] = { t, inicio: c === ini };
+    }
+    return cells;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={String(tri)} onValueChange={(v) => setTri(Number(v))}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TRIMESTRES.map((tr) => (
+              <SelectItem key={tr.value} value={String(tr.value)}>
+                {tr.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-sm text-slate-500">{ano}</span>
+        {/* Legenda de estados */}
+        <div className="ml-auto flex flex-wrap gap-1.5">
+          {ESTADOS_TURMA.map((e) => (
+            <span key={e.value} className={`rounded px-2 py-0.5 text-[11px] ${e.badge}`}>
+              {e.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Totais por natureza (Visão Geral do trimestre) */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Kpi label="Turmas no trimestre" value={totais.Transversal.turmas + totais.Tech.turmas} />
+        <Kpi
+          label="Transversais (turmas · formandos)"
+          value={totais.Transversal.turmas}
+          sub={`${totais.Transversal.formandos} formandos`}
+        />
+        <Kpi
+          label="Tech (turmas · formandos)"
+          value={totais.Tech.turmas}
+          sub={`${totais.Tech.formandos} formandos`}
+        />
+      </div>
+
+      {/* Grelha Gantt */}
+      {rows.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-slate-400">
+            Sem turmas com data marcada neste trimestre.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="overflow-x-auto p-0">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th
+                    rowSpan={2}
+                    className="sticky left-0 z-10 min-w-[220px] border-b border-r border-slate-200 bg-slate-50 p-2 text-left font-semibold text-slate-600"
+                  >
+                    Formação
+                  </th>
+                  {meses.map((m) => (
+                    <th
+                      key={m}
+                      colSpan={4}
+                      className="border-b border-l border-slate-200 bg-slate-50 p-1.5 text-center font-semibold text-slate-600"
+                    >
+                      {MESES_CURTO[m]}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {meses.map((m) =>
+                    BUCKETS.map(([lbl], bi) => (
+                      <th
+                        key={`${m}-${bi}`}
+                        className={`border-b border-slate-200 p-1 text-center font-normal text-slate-400 ${
+                          bi === 0 ? "border-l" : ""
+                        }`}
+                      >
+                        {lbl}
+                      </th>
+                    ))
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(([nome, turmas]) => {
+                  const cells = celulas(turmas);
+                  return (
+                    <tr key={nome} className="hover:bg-slate-50/50">
+                      <td className="sticky left-0 z-10 min-w-[220px] border-b border-r border-slate-200 bg-white p-2 text-slate-800">
+                        {nome}
+                      </td>
+                      {cells.map((c, i) => (
+                        <td
+                          key={i}
+                          className={`border-b border-slate-100 p-0.5 text-center align-middle ${
+                            i % 4 === 0 ? "border-l border-slate-200" : ""
+                          }`}
+                        >
+                          {c && (
+                            <div
+                              className={`truncate rounded px-1 py-1 text-[10px] font-medium ${
+                                ESTADO_TURMA_BADGE[c.t.estado]
+                              }`}
+                              title={`${c.t.codigo ?? "Turma"} — ${ESTADO_TURMA_LABEL[c.t.estado]}${
+                                c.t.turno ? " · " + c.t.turno : ""
+                              }`}
+                            >
+                              {c.inicio ? (c.t.codigo ?? "T") + (c.t.turno ? ` · ${c.t.turno}` : "") : "•"}
+                            </div>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Turmas do ano ainda sem data marcada */}
+      {semData.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <h4 className="mb-2 text-sm font-semibold text-slate-700">
+              Sem data marcada ({semData.length})
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {semData.map((t) => (
+                <span
+                  key={t.id}
+                  className={`rounded-full px-3 py-1 text-xs ${ESTADO_TURMA_BADGE[t.estado]}`}
+                  title={ESTADO_TURMA_LABEL[t.estado]}
+                >
+                  {t.formacaoNome}
+                  {t.codigo ? ` · ${t.codigo}` : ""}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -1024,6 +1295,10 @@ function TurmaDialog({
   const [formador, setFormador] = useState(turma?.formador ?? "");
   const [local, setLocal] = useState(turma?.local ?? "");
   const [modalidade, setModalidade] = useState(turma?.modalidade ?? "");
+  const [duracaoHoras, setDuracaoHoras] = useState(
+    turma?.duracaoHoras != null ? String(turma.duracaoHoras) : ""
+  );
+  const [turno, setTurno] = useState(turma?.turno ?? "");
   const [dataInicio, setDataInicio] = useState(ymd(turma?.dataInicio ?? null));
   const [dataFim, setDataFim] = useState(ymd(turma?.dataFim ?? null));
   const [notas, setNotas] = useState(turma?.notas ?? "");
@@ -1040,6 +1315,8 @@ function TurmaDialog({
       formador,
       local,
       modalidade: modalidade || null,
+      duracaoHoras: duracaoHoras || null,
+      turno: turno || null,
       dataInicio: dataInicio || null,
       dataFim: dataFim || null,
       notas,
@@ -1115,6 +1392,30 @@ function TurmaDialog({
                 {MODALIDADES.map((m) => (
                   <SelectItem key={m} value={m}>
                     {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="mb-1 block">Carga horária</Label>
+            <Input
+              type="number"
+              value={duracaoHoras}
+              onChange={(e) => setDuracaoHoras(e.target.value)}
+              placeholder="ex.: 12"
+            />
+          </div>
+          <div>
+            <Label className="mb-1 block">Turno</Label>
+            <Select value={turno || undefined} onValueChange={setTurno}>
+              <SelectTrigger>
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {TURNOS.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1221,6 +1522,107 @@ function NovoAnoDialog({
           <Button variant="navy" disabled={saving} onClick={submit}>
             {saving ? "A criar…" : "Criar plano"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* --------------------- Dialog: importar template ------------------------- */
+type ImportResultado = {
+  ano: number;
+  linhas: number;
+  colaboradoresNovos: number;
+  formacoesNovas: number;
+  inscricoesCriadas: number;
+  inscricoesActualizadas: number;
+};
+
+function ImportarTemplateDialog({
+  planoId,
+  ano,
+  onClose,
+  onDone,
+}: {
+  planoId: string;
+  ano: number | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [resultado, setResultado] = useState<ImportResultado | null>(null);
+
+  async function submit() {
+    if (!file) {
+      toast.error("Escolha um ficheiro .xlsx");
+      return;
+    }
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("planoId", planoId);
+      const res = await fetch("/api/plano-formativo/import", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`);
+      setResultado(data as ImportResultado);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && (resultado ? onDone() : onClose())}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Importar template{ano ? ` — ${ano}` : ""}</DialogTitle>
+        </DialogHeader>
+
+        {resultado ? (
+          <div className="space-y-2 text-sm">
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-800">
+              Importação concluída para o plano de {resultado.ano}.
+            </div>
+            <ul className="space-y-1 text-slate-600">
+              <li>Linhas lidas: <b>{resultado.linhas}</b></li>
+              <li>Inscrições criadas: <b>{resultado.inscricoesCriadas}</b></li>
+              <li>Inscrições actualizadas: <b>{resultado.inscricoesActualizadas}</b></li>
+              <li>Colaboradores novos: <b>{resultado.colaboradoresNovos}</b></li>
+              <li>Formações novas: <b>{resultado.formacoesNovas}</b></li>
+            </ul>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500">
+              Escolha o template preenchido (.xlsx). As necessidades são importadas para o
+              ano <b>{ano}</b>. Correr de novo actualiza as existentes (não duplica).
+            </p>
+            <Input
+              type="file"
+              accept=".xlsx"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+        )}
+
+        <DialogFooter>
+          {resultado ? (
+            <Button variant="navy" onClick={onDone}>
+              Fechar
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button variant="navy" disabled={saving || !file} onClick={submit}>
+                {saving ? "A importar…" : "Importar"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
