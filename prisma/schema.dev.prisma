@@ -556,3 +556,91 @@ model TesouroTentativa {
   @@index([dinamicaId])
   @@index([equipaId])
 }
+
+// ===========================================================================
+// Módulo: Plano Formativo (plano de formação interno anual)
+// Fluxo: necessidade (inscrição) → organizar em turmas → fornecedor/formador →
+// articular datas → executar até acontecer. Esta é a FONTE ÚNICA: as antigas
+// "abas por formação" e o "RESUMO" da planilha passam a ser vistas calculadas.
+// ===========================================================================
+
+// Colaborador / formando (master). Uma pessoa tem várias inscrições.
+model Colaborador {
+  id               String   @id @default(cuid())
+  nome             String
+  funcao           String?
+  direcao          String?
+  area             String?
+  liderancaDirecta String?
+  ativo            Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  inscricoes PfInscricao[]
+
+  @@index([nome])
+}
+
+// Formação do catálogo (chave de agrupamento do RESUMO).
+model PfFormacao {
+  id               String   @id @default(cuid())
+  nome             String   @unique
+  competencia      String? // Técnica | Comportamental | Evento
+  tipoAccao        String? // Treinamento | Certificação | Evento
+  pilar            String? // Pilar estratégico
+  area             String? // Área/direcção agrupadora (RESUMO)
+  entidadeSugerida String?
+  descricao        String?
+  ativo            Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  turmas     PfTurma[]
+  inscricoes PfInscricao[]
+}
+
+// Turma / edição de uma formação — o coração do fluxo de execução.
+// Estado: PLANEADO → EM_ORGANIZACAO → AGENDADO → EM_CURSO → CONCLUIDO | CANCELADO
+model PfTurma {
+  id         String     @id @default(cuid())
+  formacaoId String
+  formacao   PfFormacao @relation(fields: [formacaoId], references: [id], onDelete: Cascade)
+  codigo     String?
+  estado     String     @default("PLANEADO")
+  entidade   String? // fornecedor / plataforma (ex.: "Plataforma Alura", "Microsoft")
+  formador   String? // nome do formador
+  local      String? // sala / local
+  modalidade String? // Presencial | Online | Híbrido
+  dataInicio DateTime?
+  dataFim    DateTime?
+  notas      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  inscricoes PfInscricao[]
+
+  @@index([formacaoId])
+  @@index([estado])
+}
+
+// Inscrição / necessidade — 1 linha da antiga aba "Todos".
+// A turma fica null enquanto a necessidade não é organizada numa edição.
+model PfInscricao {
+  id            String      @id @default(cuid())
+  colaboradorId String
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  formacaoId    String
+  formacao      PfFormacao  @relation(fields: [formacaoId], references: [id], onDelete: Cascade)
+  turmaId       String?
+  turma         PfTurma?    @relation(fields: [turmaId], references: [id], onDelete: SetNull)
+  prioridade    String? // Alta | Média | Baixa
+  motivo        String? // "Por quê?"
+  estado        String      @default("PLANEADO") // PLANEADO | CONFIRMADO | CONCLUIDO | DESISTIU
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([colaboradorId, formacaoId])
+  @@index([formacaoId])
+  @@index([turmaId])
+  @@index([colaboradorId])
+}

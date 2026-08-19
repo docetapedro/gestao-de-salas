@@ -18,7 +18,8 @@
     "db:dev:generate": "prisma generate --schema prisma/schema.dev.prisma",
     "db:dev:push": "prisma db push --schema prisma/schema.dev.prisma",
     "db:dev:setup": "prisma generate --schema prisma/schema.dev.prisma && prisma db push --schema prisma/schema.dev.prisma && tsx prisma/seed.ts",
-    "build:lista-presenca": "node scripts/build-lista-presenca-template.mjs"
+    "build:lista-presenca": "node scripts/build-lista-presenca-template.mjs",
+    "db:import:plano": "tsx prisma/import-plano-formativo.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -39,6 +40,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "docxtemplater": "^3.69.2",
+    "exceljs": "^4.4.0",
     "jose": "^5.9.6",
     "lucide-react": "^0.468.0",
     "next": "^15.5.19",

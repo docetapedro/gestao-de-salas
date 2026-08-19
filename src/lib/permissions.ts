@@ -10,6 +10,7 @@ export type ModuloKey =
   | "eventos"
   | "salas"
   | "projetos"
+  | "plano-formativo"
   | "stock"
   | "gamificacao"
   | "cadastros"
@@ -21,6 +22,7 @@ export const MODULOS: { key: ModuloKey; label: string }[] = [
   { key: "eventos", label: "Eventos" },
   { key: "salas", label: "Salas" },
   { key: "projetos", label: "Projectos" },
+  { key: "plano-formativo", label: "Plano Formativo" },
   { key: "stock", label: "Stock" },
   { key: "gamificacao", label: "Gamificação" },
   { key: "cadastros", label: "Cadastros" },
