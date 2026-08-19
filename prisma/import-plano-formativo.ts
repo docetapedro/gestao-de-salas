@@ -64,7 +64,15 @@ function normPrioridade(v: string | null): string | null {
 async function main() {
   const file = join(__dirname, "data", "plano-formativo.json");
   const rows: Row[] = JSON.parse(readFileSync(file, "utf-8"));
-  console.log(`A importar ${rows.length} linha(s) de ${file}\n`);
+
+  // Ano do plano: variável ANO (ex.: ANO=2025) ou, por omissão, o ano actual.
+  const ano = Number(process.env.ANO) || new Date().getFullYear();
+  const plano = await prisma.pfPlano.upsert({
+    where: { ano },
+    update: {},
+    create: { ano },
+  });
+  console.log(`A importar ${rows.length} linha(s) para o plano ${ano} de ${file}\n`);
 
   // 1) Colaboradores (dedup por nome). Guarda id por nome.
   const colabByNome = new Map<string, string>();
@@ -119,12 +127,19 @@ async function main() {
     const colaboradorId = colabByNome.get(nome)!;
     const formacaoId = formacaoByNome.get(formacao)!;
     await prisma.pfInscricao.upsert({
-      where: { colaboradorId_formacaoId: { colaboradorId, formacaoId } },
+      where: {
+        planoId_colaboradorId_formacaoId: {
+          planoId: plano.id,
+          colaboradorId,
+          formacaoId,
+        },
+      },
       update: {
         prioridade: normPrioridade(r.prioridade) ?? undefined,
         motivo: clean(r.motivo) ?? undefined,
       },
       create: {
+        planoId: plano.id,
         colaboradorId,
         formacaoId,
         prioridade: normPrioridade(r.prioridade),

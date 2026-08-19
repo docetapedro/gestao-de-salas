@@ -17,14 +17,21 @@ export async function POST(req: NextRequest) {
     assertCan(await getSession(), "plano-formativo", "manage");
     const body = await req.json();
     const formacaoId = str(body.formacaoId);
+    const planoId = str(body.planoId);
     if (!formacaoId) return json({ error: "Formação é obrigatória" }, 400);
+    if (!planoId) return json({ error: "Ano/plano é obrigatório" }, 400);
 
-    const formacao = await prisma.pfFormacao.findUnique({ where: { id: formacaoId } });
+    const [formacao, plano] = await Promise.all([
+      prisma.pfFormacao.findUnique({ where: { id: formacaoId } }),
+      prisma.pfPlano.findUnique({ where: { id: planoId } }),
+    ]);
     if (!formacao) return json({ error: "Formação não encontrada" }, 404);
+    if (!plano) return json({ error: "Plano não encontrado" }, 404);
 
     const estado = isEstadoTurma(body.estado) ? body.estado : "PLANEADO";
     const turma = await prisma.pfTurma.create({
       data: {
+        planoId,
         formacaoId,
         codigo: str(body.codigo),
         estado,

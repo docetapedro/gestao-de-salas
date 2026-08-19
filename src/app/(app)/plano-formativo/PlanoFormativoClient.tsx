@@ -33,7 +33,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import DatePicker from "@/components/DatePicker";
-import { ChevronDown, Download, Plus, Search, Trash2, Users } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronDown,
+  Download,
+  FileDown,
+  Plus,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
 import {
   ESTADOS_TURMA,
   ESTADO_TURMA_BADGE,
@@ -88,9 +97,10 @@ type Turma = {
 };
 type Formacao = FormacaoLite & {
   entidadeSugerida: string | null;
-  _count: { inscricoes: number };
+  inscricoesCount: number;
   turmas: Turma[];
 };
+type Plano = { id: string; ano: number; titulo: string | null };
 
 const TODOS = "__todos__";
 const SEM_TURMA = "__none__";
@@ -98,16 +108,28 @@ const ymd = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 
 /* ============================ Componente ================================== */
 export default function PlanoFormativoClient({ canManage }: { canManage: boolean }) {
+  const [planos, setPlanos] = useState<Plano[]>([]);
+  const [ano, setAno] = useState<number | null>(null);
+  const [planoId, setPlanoId] = useState<string | null>(null);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [formacoes, setFormacoes] = useState<Formacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [novoAno, setNovoAno] = useState(false);
 
-  async function reload() {
+  async function reload(targetAno?: number | null) {
     try {
-      const data = await api<{ inscricoes: Inscricao[]; formacoes: Formacao[] }>(
-        "/api/plano-formativo"
-      );
+      const qs = targetAno ? `?ano=${targetAno}` : "";
+      const data = await api<{
+        planos: Plano[];
+        ano: number | null;
+        planoId: string | null;
+        inscricoes: Inscricao[];
+        formacoes: Formacao[];
+      }>(`/api/plano-formativo${qs}`);
+      setPlanos(data.planos);
+      setAno(data.ano);
+      setPlanoId(data.planoId);
       setInscricoes(data.inscricoes);
       setFormacoes(data.formacoes);
       setError(null);
@@ -132,35 +154,103 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
 
   return (
     <div className="space-y-4">
-      <Tabs defaultValue="plano">
-        <TabsList>
-          <TabsTrigger value="plano">Plano geral</TabsTrigger>
-          <TabsTrigger value="turmas">Formações &amp; Turmas</TabsTrigger>
-          <TabsTrigger value="resumo">Resumo</TabsTrigger>
-        </TabsList>
+      {/* Barra do ano + acções globais */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-slate-500">Ano do plano</Label>
+          {planos.length > 0 ? (
+            <Select value={ano ? String(ano) : undefined} onValueChange={(v) => reload(Number(v))}>
+              <SelectTrigger className="w-[120px] font-semibold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {planos.map((p) => (
+                  <SelectItem key={p.id} value={String(p.ano)}>
+                    {p.ano}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-sm text-slate-400">— sem planos —</span>
+          )}
+        </div>
+        {canManage && (
+          <Button variant="outline" size="sm" onClick={() => setNovoAno(true)}>
+            <CalendarPlus className="h-4 w-4" /> Novo ano
+          </Button>
+        )}
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" asChild>
+            <a href="/api/plano-formativo/template" download>
+              <FileDown className="h-4 w-4" /> Baixar template
+            </a>
+          </Button>
+          {planoId && (
+            <Button variant="outline" asChild>
+              <a href={`/api/plano-formativo/export?ano=${ano}`} download>
+                <Download className="h-4 w-4" /> Exportar Excel
+              </a>
+            </Button>
+          )}
+        </div>
+      </div>
 
-        <TabsContent value="plano">
-          <PlanoGeral
-            inscricoes={inscricoes}
-            formacoes={formacoes}
-            canManage={canManage}
-            onChanged={reload}
-          />
-        </TabsContent>
+      {planoId ? (
+        <Tabs defaultValue="plano">
+          <TabsList>
+            <TabsTrigger value="plano">Plano geral</TabsTrigger>
+            <TabsTrigger value="turmas">Formações &amp; Turmas</TabsTrigger>
+            <TabsTrigger value="resumo">Resumo</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="turmas">
-          <FormacoesTurmas
-            formacoes={formacoes}
-            inscricoes={inscricoes}
-            canManage={canManage}
-            onChanged={reload}
-          />
-        </TabsContent>
+          <TabsContent value="plano">
+            <PlanoGeral
+              inscricoes={inscricoes}
+              formacoes={formacoes}
+              canManage={canManage}
+              planoId={planoId}
+              onChanged={() => reload(ano)}
+            />
+          </TabsContent>
 
-        <TabsContent value="resumo">
-          <Resumo inscricoes={inscricoes} formacoes={formacoes} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="turmas">
+            <FormacoesTurmas
+              formacoes={formacoes}
+              inscricoes={inscricoes}
+              canManage={canManage}
+              planoId={planoId}
+              onChanged={() => reload(ano)}
+            />
+          </TabsContent>
+
+          <TabsContent value="resumo">
+            <Resumo inscricoes={inscricoes} formacoes={formacoes} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <Card>
+          <CardContent className="py-16 text-center text-slate-500">
+            <p className="mb-3">Ainda não existe nenhum plano anual.</p>
+            {canManage && (
+              <Button variant="navy" onClick={() => setNovoAno(true)}>
+                <CalendarPlus className="h-4 w-4" /> Criar plano do ano
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {novoAno && (
+        <NovoAnoDialog
+          anosExistentes={planos.map((p) => p.ano)}
+          onClose={() => setNovoAno(false)}
+          onSaved={(a) => {
+            setNovoAno(false);
+            reload(a);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -170,11 +260,13 @@ function PlanoGeral({
   inscricoes,
   formacoes,
   canManage,
+  planoId,
   onChanged,
 }: {
   inscricoes: Inscricao[];
   formacoes: Formacao[];
   canManage: boolean;
+  planoId: string;
   onChanged: () => void;
 }) {
   const [busca, setBusca] = useState("");
@@ -252,11 +344,6 @@ function PlanoGeral({
             options={ESTADOS_INSCRICAO.map((e) => e.value)}
             labels={Object.fromEntries(ESTADOS_INSCRICAO.map((e) => [e.value, e.label]))}
           />
-          <Button variant="outline" asChild>
-            <a href="/api/plano-formativo/export" download>
-              <Download className="h-4 w-4" /> Exportar Excel
-            </a>
-          </Button>
           {canManage && (
             <Button variant="navy" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" /> Necessidade
@@ -355,6 +442,7 @@ function PlanoGeral({
       {addOpen && (
         <AddNecessidadeDialog
           formacoes={formacoes}
+          planoId={planoId}
           onClose={() => setAddOpen(false)}
           onSaved={() => {
             setAddOpen(false);
@@ -371,11 +459,13 @@ function FormacoesTurmas({
   formacoes,
   inscricoes,
   canManage,
+  planoId,
   onChanged,
 }: {
   formacoes: Formacao[];
   inscricoes: Inscricao[];
   canManage: boolean;
+  planoId: string;
   onChanged: () => void;
 }) {
   const [aberta, setAberta] = useState<string | null>(null);
@@ -395,9 +485,14 @@ function FormacoesTurmas({
     return m;
   }, [inscricoes]);
 
+  // Só as formações com necessidades ou turmas NESTE ano (+ filtro de pesquisa).
   const lista = useMemo(() => {
     const q = normalizar(busca);
-    return formacoes.filter((f) => !q || normalizar(f.nome).includes(q));
+    return formacoes.filter(
+      (f) =>
+        (f.inscricoesCount > 0 || f.turmas.length > 0) &&
+        (!q || normalizar(f.nome).includes(q))
+    );
   }, [formacoes, busca]);
 
   async function allocate(inscricaoId: string, turmaId: string | null) {
@@ -460,7 +555,7 @@ function FormacoesTurmas({
               <div className="flex items-center gap-4 text-sm text-slate-500">
                 <span className="flex items-center gap-1">
                   <Users className="h-4 w-4" />
-                  {f._count.inscricoes}
+                  {f.inscricoesCount}
                 </span>
                 <span>{f.turmas.length} turma(s)</span>
               </div>
@@ -606,6 +701,7 @@ function FormacoesTurmas({
         <TurmaDialog
           formacao={turmaDialog.formacao}
           turma={turmaDialog.turma}
+          planoId={planoId}
           onClose={() => setTurmaDialog(null)}
           onSaved={() => {
             setTurmaDialog(null);
@@ -788,10 +884,12 @@ function InlineSelect({
 /* ----------------------- Dialog: nova necessidade ------------------------ */
 function AddNecessidadeDialog({
   formacoes,
+  planoId,
   onClose,
   onSaved,
 }: {
   formacoes: Formacao[];
+  planoId: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -814,6 +912,7 @@ function AddNecessidadeDialog({
       await api("/api/plano-formativo/inscricoes", {
         method: "POST",
         body: JSON.stringify({
+          planoId,
           nome,
           funcao,
           direcao,
@@ -909,11 +1008,13 @@ function AddNecessidadeDialog({
 function TurmaDialog({
   formacao,
   turma,
+  planoId,
   onClose,
   onSaved,
 }: {
   formacao: Formacao;
   turma: Turma | null;
+  planoId: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -931,6 +1032,7 @@ function TurmaDialog({
   async function submit() {
     setSaving(true);
     const body = {
+      planoId,
       formacaoId: formacao.id,
       codigo,
       estado,
@@ -1037,6 +1139,87 @@ function TurmaDialog({
           </Button>
           <Button variant="navy" disabled={saving} onClick={submit}>
             {saving ? "A guardar…" : turma ? "Guardar" : "Criar turma"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------- Dialog: novo ano/plano ------------------------ */
+function NovoAnoDialog({
+  anosExistentes,
+  onClose,
+  onSaved,
+}: {
+  anosExistentes: number[];
+  onClose: () => void;
+  onSaved: (ano: number) => void;
+}) {
+  // Sugere o ano seguinte ao mais recente (ou o próximo se não houver planos).
+  const sugestao =
+    anosExistentes.length > 0 ? Math.max(...anosExistentes) + 1 : new Date().getFullYear();
+  const [ano, setAno] = useState(String(sugestao));
+  const [titulo, setTitulo] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    const n = Number(ano);
+    if (!Number.isInteger(n) || n < 2000 || n > 2100) {
+      toast.error("Ano inválido");
+      return;
+    }
+    if (anosExistentes.includes(n)) {
+      toast.error(`Já existe o plano de ${n}`);
+      return;
+    }
+    setSaving(true);
+    try {
+      await api("/api/plano-formativo/planos", {
+        method: "POST",
+        body: JSON.stringify({ ano: n, titulo }),
+      });
+      toast.success(`Plano de ${n} criado`);
+      onSaved(n);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Novo plano anual</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-1 block">Ano *</Label>
+            <Input
+              type="number"
+              value={ano}
+              onChange={(e) => setAno(e.target.value)}
+              min={2000}
+              max={2100}
+            />
+          </div>
+          <div>
+            <Label className="mb-1 block">Título (opcional)</Label>
+            <Input
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="ex.: Plano Formativo 2027"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="navy" disabled={saving} onClick={submit}>
+            {saving ? "A criar…" : "Criar plano"}
           </Button>
         </DialogFooter>
       </DialogContent>

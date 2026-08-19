@@ -34,15 +34,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (turmaId) {
         const insc = await prisma.pfInscricao.findUnique({
           where: { id },
-          select: { formacaoId: true },
+          select: { formacaoId: true, planoId: true },
         });
         const turma = await prisma.pfTurma.findUnique({
           where: { id: turmaId },
-          select: { formacaoId: true },
+          select: { formacaoId: true, planoId: true },
         });
         if (!insc || !turma) return json({ error: "Inscrição ou turma inexistente" }, 404);
         if (turma.formacaoId !== insc.formacaoId)
           return json({ error: "A turma não é da mesma formação" }, 400);
+        if (turma.planoId !== insc.planoId)
+          return json({ error: "A turma não é do mesmo ano" }, 400);
       }
     }
 
