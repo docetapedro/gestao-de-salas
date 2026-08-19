@@ -10,6 +10,11 @@ const str = (v: unknown) => {
   return t ? t : null;
 };
 const date = (v: unknown) => (v ? new Date(v as string) : null);
+const num = (v: unknown) => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 // Cria uma turma/edição para uma formação.
 export async function POST(req: NextRequest) {
@@ -39,6 +44,8 @@ export async function POST(req: NextRequest) {
         formador: str(body.formador),
         local: str(body.local),
         modalidade: str(body.modalidade),
+        duracaoHoras: num(body.duracaoHoras),
+        turno: str(body.turno),
         dataInicio: date(body.dataInicio),
         dataFim: date(body.dataFim),
         notas: str(body.notas),
