@@ -565,7 +565,22 @@ model TesouroTentativa {
 // Fluxo: necessidade (inscrição) → organizar em turmas → fornecedor/formador →
 // articular datas → executar até acontecer. Esta é a FONTE ÚNICA: as antigas
 // "abas por formação" e o "RESUMO" da planilha passam a ser vistas calculadas.
+// O plano é ANUAL: cada ano é um PfPlano; inscrições e turmas pertencem a um ano.
 // ===========================================================================
+
+// Plano de um ano (ex.: 2026). As formações e colaboradores são partilhados
+// entre anos; o que é anual são as inscrições (necessidades) e as turmas.
+model PfPlano {
+  id        String   @id @default(cuid())
+  ano       Int      @unique
+  titulo    String?
+  notas     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inscricoes PfInscricao[]
+  turmas     PfTurma[]
+}
 
 // Colaborador / formando (master). Uma pessoa tem várias inscrições.
 model Colaborador {
@@ -606,6 +621,8 @@ model PfFormacao {
 // Estado: PLANEADO → EM_ORGANIZACAO → AGENDADO → EM_CURSO → CONCLUIDO | CANCELADO
 model PfTurma {
   id         String     @id @default(cuid())
+  planoId    String
+  plano      PfPlano    @relation(fields: [planoId], references: [id], onDelete: Cascade)
   formacaoId String
   formacao   PfFormacao @relation(fields: [formacaoId], references: [id], onDelete: Cascade)
   codigo     String?
@@ -622,6 +639,7 @@ model PfTurma {
 
   inscricoes PfInscricao[]
 
+  @@index([planoId])
   @@index([formacaoId])
   @@index([estado])
 }
@@ -630,6 +648,8 @@ model PfTurma {
 // A turma fica null enquanto a necessidade não é organizada numa edição.
 model PfInscricao {
   id            String      @id @default(cuid())
+  planoId       String
+  plano         PfPlano     @relation(fields: [planoId], references: [id], onDelete: Cascade)
   colaboradorId String
   colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
   formacaoId    String
@@ -642,7 +662,9 @@ model PfInscricao {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  @@unique([colaboradorId, formacaoId])
+  // Uma pessoa não repete a mesma formação DENTRO do mesmo ano/plano.
+  @@unique([planoId, colaboradorId, formacaoId])
+  @@index([planoId])
   @@index([formacaoId])
   @@index([turmaId])
   @@index([colaboradorId])

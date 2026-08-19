@@ -5,7 +5,13 @@
 //   • Turmas  — todas as turmas com fornecedor/formador/datas/estado
 // As antigas abas por formação são substituídas pelo AutoFiltro da folha "Todos".
 import ExcelJS from "exceljs";
-import { ESTADO_TURMA_LABEL, ESTADOS_INSCRICAO } from "./plano-formativo";
+import {
+  ESTADO_TURMA_LABEL,
+  ESTADOS_INSCRICAO,
+  COMPETENCIAS,
+  TIPOS_ACCAO,
+  PRIORIDADES,
+} from "./plano-formativo";
 
 type TurmaLite = {
   codigo: string | null;
@@ -328,6 +334,95 @@ export async function buildPlanoFormativoWorkbook(
     const volta = ws.getCell("O1");
     volta.value = { text: "↩ RESUMO", hyperlink: "#RESUMO!A1" };
     volta.font = { color: { argb: "FF2563EB" }, underline: true };
+  });
+
+  const arrayBuffer = await wb.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/* ========================================================================== */
+/* Modelo (template) de importação — para preencher e importar necessidades.  */
+/* Colunas iguais às que o import lê (aba "Todos" original).                    */
+/* ========================================================================== */
+export async function buildImportTemplateWorkbook(): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Academia TIS — Plano Formativo";
+
+  const ws = wb.addWorksheet("Inscrições", {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+  ws.columns = [
+    { header: "DIRECÇÃO", key: "direcao", width: 26 },
+    { header: "ÁREA", key: "area", width: 22 },
+    { header: "NOME DO COLABORADOR", key: "nome", width: 30 },
+    { header: "FUNÇÃO", key: "funcao", width: 22 },
+    { header: "LIDERANÇA DIRECTA", key: "lideranca", width: 24 },
+    { header: "DESIGNAÇÃO DA FORMAÇÃO", key: "formacao", width: 40 },
+    { header: "COMPETÊNCIA", key: "competencia", width: 16 },
+    { header: "ENTIDADE", key: "entidade", width: 22 },
+    { header: "TIPO DE ACÇÃO", key: "tipo", width: 16 },
+    { header: "PRIORIDADE", key: "prioridade", width: 12 },
+    { header: "PILAR ESTRATÉGICO", key: "pilar", width: 20 },
+    { header: "POR QUÊ?", key: "motivo", width: 50 },
+  ];
+  styleHeader(ws.getRow(1));
+
+  // Linha de exemplo (a apagar antes de importar).
+  const exemplo = ws.addRow({
+    direcao: "Digital & Software Engineering",
+    area: "BD e Interoperabilidade",
+    nome: "(exemplo) Maria Silva",
+    funcao: "Consultora DBA",
+    lideranca: "Rodrigo Vivas",
+    formacao: "Administração com PostgreSQL",
+    competencia: "Técnica",
+    entidade: "Plataforma Alura",
+    tipo: "Treinamento",
+    prioridade: "Alta",
+    pilar: "Tecnologia",
+    motivo: "Actualização de competências",
+  });
+  exemplo.eachCell((c) => (c.font = { italic: true, color: { argb: "FF94A3B8" } }));
+
+  // Listas suspensas (Competência col G, Tipo col I, Prioridade col J) até à linha 500.
+  const lista = (arr: readonly string[]) => `"${arr.join(",")}"`;
+  for (let r = 2; r <= 500; r++) {
+    ws.getCell(`G${r}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [lista(COMPETENCIAS)],
+    };
+    ws.getCell(`I${r}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [lista(TIPOS_ACCAO)],
+    };
+    ws.getCell(`J${r}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [lista(PRIORIDADES)],
+    };
+  }
+
+  /* --------------------------- Instruções ------------------------------- */
+  const inst = wb.addWorksheet("Instruções");
+  inst.getColumn(1).width = 100;
+  const linhas: [string, boolean][] = [
+    ["Como preencher o modelo do Plano Formativo", true],
+    ["", false],
+    ["1. Preencha uma linha por necessidade: um colaborador + uma formação.", false],
+    ["2. Obrigatórios: NOME DO COLABORADOR e DESIGNAÇÃO DA FORMAÇÃO. As restantes colunas são opcionais.", false],
+    ["3. COMPETÊNCIA, TIPO DE ACÇÃO e PRIORIDADE têm lista suspensa — escolha um valor.", false],
+    [`   • COMPETÊNCIA: ${COMPETENCIAS.join(" / ")}`, false],
+    [`   • TIPO DE ACÇÃO: ${TIPOS_ACCAO.join(" / ")}`, false],
+    [`   • PRIORIDADE: ${PRIORIDADES.join(" / ")}`, false],
+    ["4. Apague a linha de exemplo (a cinzento) antes de importar.", false],
+    ["5. A mesma pessoa pode repetir uma formação em anos diferentes, mas não no mesmo ano.", false],
+    ["6. Guarde o ficheiro e entregue-o ao gestor do Plano Formativo para importação.", false],
+  ];
+  linhas.forEach(([txt, bold]) => {
+    const row = inst.addRow([txt]);
+    if (bold) row.getCell(1).font = { bold: true, size: 13, color: { argb: NAVY } };
   });
 
   const arrayBuffer = await wb.xlsx.writeBuffer();

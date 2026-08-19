@@ -18,6 +18,12 @@ export async function POST(req: NextRequest) {
     assertCan(await getSession(), "plano-formativo", "manage");
     const body = await req.json();
 
+    // --- Plano (ano) ---
+    const planoId = str(body.planoId);
+    if (!planoId) return json({ error: "Ano/plano é obrigatório" }, 400);
+    const plano = await prisma.pfPlano.findUnique({ where: { id: planoId } });
+    if (!plano) return json({ error: "Plano não encontrado" }, 404);
+
     // --- Colaborador ---
     let colaboradorId = str(body.colaboradorId);
     if (!colaboradorId) {
@@ -56,15 +62,18 @@ export async function POST(req: NextRequest) {
       formacaoId = f.id;
     }
 
-    // Evita duplicar a mesma necessidade (mesmo colaborador + formação).
+    // Evita duplicar a mesma necessidade (colaborador + formação) DENTRO do ano.
     const jaExiste = await prisma.pfInscricao.findUnique({
-      where: { colaboradorId_formacaoId: { colaboradorId, formacaoId } },
+      where: {
+        planoId_colaboradorId_formacaoId: { planoId, colaboradorId, formacaoId },
+      },
     });
     if (jaExiste)
-      return json({ error: "Este colaborador já está inscrito nesta formação", inscricao: jaExiste }, 409);
+      return json({ error: "Este colaborador já está inscrito nesta formação neste ano", inscricao: jaExiste }, 409);
 
     const inscricao = await prisma.pfInscricao.create({
       data: {
+        planoId,
         colaboradorId,
         formacaoId,
         prioridade: str(body.prioridade),
