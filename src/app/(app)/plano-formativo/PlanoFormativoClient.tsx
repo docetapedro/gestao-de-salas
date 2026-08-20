@@ -1511,7 +1511,7 @@ function NovoAnoDialog({
             <Input
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              placeholder="ex.: Plano Formativo 2027"
+              placeholder="ex.: Plano Interno 2027"
             />
           </div>
         </div>

@@ -77,7 +77,7 @@ const NAV: NavItem[] = [
     label: "Gestão Pedagógica",
     Icon: GraduationCapIcon,
     children: [
-      { href: "/plano-formativo", label: "Plano Formativo", modulo: "plano-formativo" },
+      { href: "/plano-formativo", label: "Plano Interno", modulo: "plano-formativo" },
       { href: "/lista-presenca", label: "Lista de Presença", modulo: "projetos" },
     ],
   },
