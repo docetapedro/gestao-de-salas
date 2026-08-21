@@ -240,6 +240,7 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
               colaboradores={colaboradores}
               canManage={canManage}
               planoId={planoId}
+              ano={ano}
               onChanged={() => reload(ano)}
             />
           </TabsContent>
@@ -600,6 +601,7 @@ function FormacoesTurmas({
   colaboradores,
   canManage,
   planoId,
+  ano,
   onChanged,
 }: {
   formacoes: Formacao[];
@@ -607,6 +609,7 @@ function FormacoesTurmas({
   colaboradores: Colaborador[];
   canManage: boolean;
   planoId: string;
+  ano: number | null;
   onChanged: () => void;
 }) {
   const [aberta, setAberta] = useState<string | null>(null);
@@ -859,6 +862,7 @@ function FormacoesTurmas({
           formacao={turmaDialog.formacao}
           turma={turmaDialog.turma}
           planoId={planoId}
+          ano={ano}
           onClose={() => setTurmaDialog(null)}
           onSaved={() => {
             setTurmaDialog(null);
@@ -1668,20 +1672,36 @@ function AddFormandoDialog({
 }
 
 /* ------------------------- Dialog: criar/editar turma -------------------- */
+// Sugere o próximo código de turma para uma formação: {ano}-T{n}, onde n é o
+// maior número já usado (em códigos terminados em T<número>) + 1.
+function sugerirCodigoTurma(turmas: Turma[], ano: number | null): string {
+  let max = 0;
+  for (const t of turmas) {
+    const m = /T\s*(\d+)\s*$/i.exec(t.codigo ?? "");
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  const seq = `T${max + 1}`;
+  return ano ? `${ano}-${seq}` : seq;
+}
+
 function TurmaDialog({
   formacao,
   turma,
   planoId,
+  ano,
   onClose,
   onSaved,
 }: {
   formacao: Formacao;
   turma: Turma | null;
   planoId: string;
+  ano: number | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [codigo, setCodigo] = useState(turma?.codigo ?? "");
+  const [codigo, setCodigo] = useState(
+    turma?.codigo ?? sugerirCodigoTurma(formacao.turmas, ano)
+  );
   const [estado, setEstado] = useState<EstadoTurma>(turma?.estado ?? "PLANEADO");
   const [entidade, setEntidade] = useState(turma?.entidade ?? formacao.entidadeSugerida ?? "");
   const [formador, setFormador] = useState(turma?.formador ?? "");
