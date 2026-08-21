@@ -1025,7 +1025,8 @@ function VisaoTrimestral({
     return mp * 4 + b;
   };
 
-  // Turmas do ano: as com data no trimestre entram na grelha; as sem data à parte.
+  // Turmas do ano: entram na grelha as cujo intervalo início→fim atravessa o
+  // trimestre (não só as que começam nele); as sem data ficam à parte.
   const { rows, semData, totais } = useMemo(() => {
     const noTri: TurmaFmt[] = [];
     const sem: TurmaFmt[] = [];
@@ -1036,8 +1037,17 @@ function VisaoTrimestral({
           sem.push(tf);
           continue;
         }
-        const d = new Date(t.dataInicio);
-        if (meses.includes(d.getMonth())) noTri.push(tf);
+        const di = new Date(t.dataInicio);
+        const df = t.dataFim ? new Date(t.dataFim) : di;
+        // Meses absolutos (ano×12+mês) para funcionar mesmo se atravessar o ano.
+        const iniAbs = di.getFullYear() * 12 + di.getMonth();
+        const fimAbs = Math.max(iniAbs, df.getFullYear() * 12 + df.getMonth());
+        const anoRef = ano ?? di.getFullYear();
+        const atravessa = meses.some((m) => {
+          const abs = anoRef * 12 + m;
+          return abs >= iniAbs && abs <= fimAbs;
+        });
+        if (atravessa) noTri.push(tf);
       }
     const map = new Map<string, TurmaFmt[]>();
     for (const t of noTri) {
@@ -1055,7 +1065,7 @@ function VisaoTrimestral({
       tot[nat].formandos += t._count.inscricoes;
     }
     return { rows: [...map.entries()], semData: sem, totais: tot };
-  }, [formacoes, meses]);
+  }, [formacoes, meses, ano]);
 
   // Para uma formação, calcula as células cobertas por cada turma (banda).
   function celulas(turmas: TurmaFmt[]) {
