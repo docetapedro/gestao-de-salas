@@ -121,6 +121,7 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
   const [planoId, setPlanoId] = useState<string | null>(null);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [formacoes, setFormacoes] = useState<Formacao[]>([]);
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [novoAno, setNovoAno] = useState(false);
@@ -135,12 +136,14 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
         planoId: string | null;
         inscricoes: Inscricao[];
         formacoes: Formacao[];
+        colaboradores: Colaborador[];
       }>(`/api/plano-formativo${qs}`);
       setPlanos(data.planos);
       setAno(data.ano);
       setPlanoId(data.planoId);
       setInscricoes(data.inscricoes);
       setFormacoes(data.formacoes);
+      setColaboradores(data.colaboradores ?? []);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -233,6 +236,7 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
             <FormacoesTurmas
               formacoes={formacoes}
               inscricoes={inscricoes}
+              colaboradores={colaboradores}
               canManage={canManage}
               planoId={planoId}
               onChanged={() => reload(ano)}
@@ -340,6 +344,22 @@ function PlanoGeral({
     }
   }
 
+  async function remover(i: Inscricao) {
+    if (
+      !confirm(
+        `Remover ${i.colaborador.nome} da formação "${i.formacao.nome}" neste plano?`
+      )
+    )
+      return;
+    try {
+      await api(`/api/plano-formativo/inscricoes/${i.id}`, { method: "DELETE" });
+      toast.success("Colaborador removido do plano");
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -398,6 +418,7 @@ function PlanoGeral({
                 <TableHead>Comp.</TableHead>
                 <TableHead>Prioridade</TableHead>
                 <TableHead>Estado</TableHead>
+                {canManage && <TableHead className="w-[52px]" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -456,11 +477,24 @@ function PlanoGeral({
                       </Badge>
                     )}
                   </TableCell>
+                  {canManage && (
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        title="Remover do plano"
+                        onClick={() => remover(i)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {filtradas.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-slate-400">
+                  <TableCell colSpan={canManage ? 7 : 6} className="py-8 text-center text-slate-400">
                     Sem inscrições para os filtros escolhidos.
                   </TableCell>
                 </TableRow>
@@ -489,12 +523,14 @@ function PlanoGeral({
 function FormacoesTurmas({
   formacoes,
   inscricoes,
+  colaboradores,
   canManage,
   planoId,
   onChanged,
 }: {
   formacoes: Formacao[];
   inscricoes: Inscricao[];
+  colaboradores: Colaborador[];
   canManage: boolean;
   planoId: string;
   onChanged: () => void;
@@ -505,6 +541,7 @@ function FormacoesTurmas({
     formacao: Formacao;
     turma: Turma | null;
   } | null>(null);
+  const [addFormandoFormacao, setAddFormandoFormacao] = useState<Formacao | null>(null);
 
   const porFormacao = useMemo(() => {
     const m = new Map<string, Inscricao[]>();
@@ -671,9 +708,20 @@ function FormacoesTurmas({
 
                 {/* Inscritos + alocação a turma */}
                 <div>
-                  <h4 className="mb-2 text-sm font-semibold text-slate-700">
-                    Formandos ({insc.length})
-                  </h4>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-700">
+                      Formandos ({insc.length})
+                    </h4>
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAddFormandoFormacao(f)}
+                      >
+                        <Plus className="h-4 w-4" /> Adicionar formando
+                      </Button>
+                    )}
+                  </div>
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <Table>
                       <TableHeader>
@@ -740,6 +788,20 @@ function FormacoesTurmas({
           onClose={() => setTurmaDialog(null)}
           onSaved={() => {
             setTurmaDialog(null);
+            onChanged();
+          }}
+        />
+      )}
+
+      {addFormandoFormacao && (
+        <AddFormandoDialog
+          formacao={addFormandoFormacao}
+          colaboradores={colaboradores}
+          inscricoes={inscricoes}
+          planoId={planoId}
+          onClose={() => setAddFormandoFormacao(null)}
+          onSaved={() => {
+            setAddFormandoFormacao(null);
             onChanged();
           }}
         />
@@ -1267,6 +1329,145 @@ function AddNecessidadeDialog({
             Cancelar
           </Button>
           <Button variant="navy" disabled={saving} onClick={submit}>
+            {saving ? "A guardar…" : "Adicionar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------ Dialog: adicionar formando à formação ---------------- */
+function AddFormandoDialog({
+  formacao,
+  colaboradores,
+  inscricoes,
+  planoId,
+  onClose,
+  onSaved,
+}: {
+  formacao: Formacao;
+  colaboradores: Colaborador[];
+  inscricoes: Inscricao[];
+  planoId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [busca, setBusca] = useState("");
+  const [colaboradorId, setColaboradorId] = useState("");
+  const [turmaId, setTurmaId] = useState(SEM_TURMA);
+  const [saving, setSaving] = useState(false);
+
+  // Colaboradores já inscritos nesta formação (deste ano) — já aparecem na lista.
+  const jaInscritos = useMemo(
+    () =>
+      new Set(
+        inscricoes
+          .filter((i) => i.formacao.id === formacao.id)
+          .map((i) => i.colaborador.id)
+      ),
+    [inscricoes, formacao.id]
+  );
+
+  const disponiveis = useMemo(() => {
+    const q = normalizar(busca);
+    return colaboradores.filter(
+      (c) =>
+        !jaInscritos.has(c.id) && (!q || normalizar(c.nome).includes(q))
+    );
+  }, [colaboradores, jaInscritos, busca]);
+
+  async function submit() {
+    if (!colaboradorId) {
+      toast.error("Escolha um colaborador");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api("/api/plano-formativo/inscricoes", {
+        method: "POST",
+        body: JSON.stringify({
+          planoId,
+          colaboradorId,
+          formacaoId: formacao.id,
+          turmaId: turmaId === SEM_TURMA ? null : turmaId,
+        }),
+      });
+      toast.success("Formando adicionado");
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Adicionar formando — {formacao.nome}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-1 block">Colaborador *</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                className="pl-8"
+                placeholder="Procurar colaborador…"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+              />
+            </div>
+            <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-slate-200">
+              {disponiveis.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-slate-400">
+                  {colaboradores.length === 0
+                    ? "Sem colaboradores registados."
+                    : "Nenhum colaborador disponível para adicionar."}
+                </p>
+              ) : (
+                disponiveis.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setColaboradorId(c.id)}
+                    className={`flex w-full flex-col items-start border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50 ${
+                      colaboradorId === c.id ? "bg-brand-50" : ""
+                    }`}
+                  >
+                    <span className="text-sm font-medium text-slate-800">{c.nome}</span>
+                    <span className="text-xs text-slate-400">
+                      {[c.funcao, c.direcao].filter(Boolean).join(" · ") || "—"}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1 block">Turma (opcional)</Label>
+            <Select value={turmaId} onValueChange={setTurmaId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SEM_TURMA}>— Sem turma —</SelectItem>
+                {formacao.turmas.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.codigo || "Turma"} ({ESTADO_TURMA_LABEL[t.estado]})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="navy" disabled={saving || !colaboradorId} onClick={submit}>
             {saving ? "A guardar…" : "Adicionar"}
           </Button>
         </DialogFooter>

@@ -19,10 +19,17 @@ export async function GET(req: NextRequest) {
       (anoParam ? planos.find((p) => p.ano === anoParam) : null) ?? planos[0] ?? null;
 
     if (!plano) {
-      return json({ planos, ano: null, planoId: null, inscricoes: [], formacoes: [] });
+      return json({
+        planos,
+        ano: null,
+        planoId: null,
+        inscricoes: [],
+        formacoes: [],
+        colaboradores: [],
+      });
     }
 
-    const [inscricoes, catalogo, turmas] = await Promise.all([
+    const [inscricoes, catalogo, turmas, colaboradores] = await Promise.all([
       prisma.pfInscricao.findMany({
         where: { planoId: plano.id },
         orderBy: [{ formacao: { nome: "asc" } }, { colaborador: { nome: "asc" } }],
@@ -55,6 +62,17 @@ export async function GET(req: NextRequest) {
         orderBy: [{ dataInicio: "asc" }, { createdAt: "asc" }],
         include: { _count: { select: { inscricoes: true } } },
       }),
+      prisma.colaborador.findMany({
+        orderBy: { nome: "asc" },
+        select: {
+          id: true,
+          nome: true,
+          funcao: true,
+          direcao: true,
+          area: true,
+          liderancaDirecta: true,
+        },
+      }),
     ]);
 
     // Contagens do ano por formação.
@@ -74,7 +92,14 @@ export async function GET(req: NextRequest) {
       turmas: turmasByFormacao.get(f.id) ?? [],
     }));
 
-    return json({ planos, ano: plano.ano, planoId: plano.id, inscricoes, formacoes });
+    return json({
+      planos,
+      ano: plano.ano,
+      planoId: plano.id,
+      inscricoes,
+      formacoes,
+      colaboradores,
+    });
   } catch (err) {
     return handleError(err);
   }

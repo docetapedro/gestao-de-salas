@@ -62,14 +62,41 @@ export async function POST(req: NextRequest) {
       formacaoId = f.id;
     }
 
+    // --- Turma (opcional): aloca logo a inscrição a uma turma. ---
+    // Valida que a turma pertence à mesma formação e ao mesmo plano.
+    let turmaId = str(body.turmaId);
+    if (turmaId) {
+      const turma = await prisma.pfTurma.findUnique({
+        where: { id: turmaId },
+        select: { formacaoId: true, planoId: true },
+      });
+      if (!turma) return json({ error: "Turma inexistente" }, 404);
+      if (turma.formacaoId !== formacaoId)
+        return json({ error: "A turma não é da mesma formação" }, 400);
+      if (turma.planoId !== planoId)
+        return json({ error: "A turma não é do mesmo ano" }, 400);
+    }
+
     // Evita duplicar a mesma necessidade (colaborador + formação) DENTRO do ano.
     const jaExiste = await prisma.pfInscricao.findUnique({
       where: {
         planoId_colaboradorId_formacaoId: { planoId, colaboradorId, formacaoId },
       },
     });
-    if (jaExiste)
-      return json({ error: "Este colaborador já está inscrito nesta formação neste ano", inscricao: jaExiste }, 409);
+    if (jaExiste) {
+      // Se veio uma turma, aloca a inscrição existente em vez de rejeitar.
+      if (turmaId) {
+        const inscricao = await prisma.pfInscricao.update({
+          where: { id: jaExiste.id },
+          data: { turmaId },
+        });
+        return json({ inscricao, alocada: true });
+      }
+      return json(
+        { error: "Este colaborador já está inscrito nesta formação neste ano", inscricao: jaExiste },
+        409
+      );
+    }
 
     const inscricao = await prisma.pfInscricao.create({
       data: {
@@ -78,6 +105,7 @@ export async function POST(req: NextRequest) {
         formacaoId,
         prioridade: str(body.prioridade),
         motivo: str(body.motivo),
+        turmaId,
       },
     });
     return json({ inscricao }, 201);

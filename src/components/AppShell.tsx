@@ -33,6 +33,7 @@ import {
 import {
   BriefcaseIcon,
   BuildingIcon,
+  ClipboardListIcon,
   GraduationCapIcon,
   GridIcon,
   KeyIcon,
@@ -74,10 +75,15 @@ const NAV: NavItem[] = [
     ],
   },
   {
-    label: "Gestão Pedagógica",
+    href: "/plano-formativo",
+    label: "Plano Interno",
     Icon: GraduationCapIcon,
+    modulo: "plano-formativo",
+  },
+  {
+    label: "Gestão Pedagógica",
+    Icon: ClipboardListIcon,
     children: [
-      { href: "/plano-formativo", label: "Plano Interno", modulo: "plano-formativo" },
       { href: "/lista-presenca", label: "Lista de Presença", modulo: "projetos" },
     ],
   },
