@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import {
   ChevronDown,
   Download,
   FileDown,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -309,7 +310,9 @@ function PlanoGeral({
   const [prioridade, setPrioridade] = useState(TODOS);
   const [competencia, setCompetencia] = useState(TODOS);
   const [estado, setEstado] = useState(TODOS);
+  const [agrupar, setAgrupar] = useState("none");
   const [addOpen, setAddOpen] = useState(false);
+  const [editar, setEditar] = useState<Inscricao | null>(null);
 
   const direcoes = useMemo(
     () =>
@@ -331,6 +334,28 @@ function PlanoGeral({
       return true;
     });
   }, [inscricoes, busca, direcao, prioridade, competencia, estado]);
+
+  const grupos = useMemo(() => {
+    if (agrupar === "none") return null;
+    const chave = (i: Inscricao) => {
+      if (agrupar === "direcao")
+        return (
+          [i.colaborador.direcao, i.colaborador.area].filter(Boolean).join(" / ") ||
+          "(Sem direcção)"
+        );
+      if (agrupar === "formacao") return i.formacao.nome;
+      if (agrupar === "competencia") return i.formacao.competencia || "(Sem competência)";
+      return "";
+    };
+    const m = new Map<string, Inscricao[]>();
+    for (const i of filtradas) {
+      const k = chave(i);
+      const arr = m.get(k) ?? [];
+      arr.push(i);
+      m.set(k, arr);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "pt"));
+  }, [filtradas, agrupar]);
 
   async function patch(id: string, body: Record<string, unknown>) {
     try {
@@ -359,6 +384,85 @@ function PlanoGeral({
       toast.error((e as Error).message);
     }
   }
+
+  const linha = (i: Inscricao) => (
+    <TableRow key={i.id}>
+      <TableCell>
+        <div className="font-medium text-slate-800">{i.colaborador.nome}</div>
+        <div className="text-xs text-slate-400">{i.colaborador.funcao ?? "—"}</div>
+      </TableCell>
+      <TableCell className="text-sm text-slate-600">
+        <div>{i.colaborador.direcao ?? "—"}</div>
+        <div className="text-xs text-slate-400">{i.colaborador.area ?? ""}</div>
+      </TableCell>
+      <TableCell className="max-w-[280px]">
+        <div className="text-sm text-slate-800">{i.formacao.nome}</div>
+        {i.turmaId && (
+          <span className="text-[11px] text-brand-600">● alocado a turma</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {i.formacao.competencia ? (
+          <Badge variant="secondary">{i.formacao.competencia}</Badge>
+        ) : (
+          <span className="text-slate-300">—</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {canManage ? (
+          <InlineSelect
+            value={i.prioridade ?? ""}
+            placeholder="—"
+            options={[...PRIORIDADES]}
+            onChange={(v) => patch(i.id, { prioridade: v })}
+          />
+        ) : (
+          i.prioridade ?? "—"
+        )}
+      </TableCell>
+      <TableCell>
+        {canManage ? (
+          <InlineSelect
+            value={i.estado}
+            options={ESTADOS_INSCRICAO.map((e) => e.value)}
+            labels={Object.fromEntries(
+              ESTADOS_INSCRICAO.map((e) => [e.value, e.label])
+            )}
+            onChange={(v) => patch(i.id, { estado: v })}
+          />
+        ) : (
+          <Badge
+            className={ESTADOS_INSCRICAO.find((e) => e.value === i.estado)?.badge}
+          >
+            {ESTADOS_INSCRICAO.find((e) => e.value === i.estado)?.label}
+          </Badge>
+        )}
+      </TableCell>
+      {canManage && (
+        <TableCell>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Editar"
+              onClick={() => setEditar(i)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive"
+              title="Remover do plano"
+              onClick={() => remover(i)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
+      )}
+    </TableRow>
+  );
 
   return (
     <div className="space-y-4">
@@ -395,6 +499,20 @@ function PlanoGeral({
             options={ESTADOS_INSCRICAO.map((e) => e.value)}
             labels={Object.fromEntries(ESTADOS_INSCRICAO.map((e) => [e.value, e.label]))}
           />
+          <div>
+            <Label className="mb-1 block text-xs">Agrupar por</Label>
+            <Select value={agrupar} onValueChange={setAgrupar}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem agrupamento</SelectItem>
+                <SelectItem value="direcao">Direcção / Área</SelectItem>
+                <SelectItem value="formacao">Formação</SelectItem>
+                <SelectItem value="competencia">Competência</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {canManage && (
             <Button variant="navy" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" /> Necessidade
@@ -418,80 +536,25 @@ function PlanoGeral({
                 <TableHead>Comp.</TableHead>
                 <TableHead>Prioridade</TableHead>
                 <TableHead>Estado</TableHead>
-                {canManage && <TableHead className="w-[52px]" />}
+                {canManage && <TableHead className="w-[96px]" />}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtradas.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell>
-                    <div className="font-medium text-slate-800">{i.colaborador.nome}</div>
-                    <div className="text-xs text-slate-400">{i.colaborador.funcao ?? "—"}</div>
-                  </TableCell>
-                  <TableCell className="text-sm text-slate-600">
-                    <div>{i.colaborador.direcao ?? "—"}</div>
-                    <div className="text-xs text-slate-400">{i.colaborador.area ?? ""}</div>
-                  </TableCell>
-                  <TableCell className="max-w-[280px]">
-                    <div className="text-sm text-slate-800">{i.formacao.nome}</div>
-                    {i.turmaId && (
-                      <span className="text-[11px] text-brand-600">● alocado a turma</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {i.formacao.competencia ? (
-                      <Badge variant="secondary">{i.formacao.competencia}</Badge>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {canManage ? (
-                      <InlineSelect
-                        value={i.prioridade ?? ""}
-                        placeholder="—"
-                        options={[...PRIORIDADES]}
-                        onChange={(v) => patch(i.id, { prioridade: v })}
-                      />
-                    ) : (
-                      i.prioridade ?? "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {canManage ? (
-                      <InlineSelect
-                        value={i.estado}
-                        options={ESTADOS_INSCRICAO.map((e) => e.value)}
-                        labels={Object.fromEntries(
-                          ESTADOS_INSCRICAO.map((e) => [e.value, e.label])
-                        )}
-                        onChange={(v) => patch(i.id, { estado: v })}
-                      />
-                    ) : (
-                      <Badge
-                        className={
-                          ESTADOS_INSCRICAO.find((e) => e.value === i.estado)?.badge
-                        }
-                      >
-                        {ESTADOS_INSCRICAO.find((e) => e.value === i.estado)?.label}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  {canManage && (
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        title="Remover do plano"
-                        onClick={() => remover(i)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
+              {grupos
+                ? grupos.map(([nome, itens]) => (
+                    <Fragment key={nome}>
+                      <TableRow className="bg-slate-50 hover:bg-slate-50">
+                        <TableCell
+                          colSpan={canManage ? 7 : 6}
+                          className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          {nome} · {itens.length}
+                        </TableCell>
+                      </TableRow>
+                      {itens.map((i) => linha(i))}
+                    </Fragment>
+                  ))
+                : filtradas.map((i) => linha(i))}
               {filtradas.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={canManage ? 7 : 6} className="py-8 text-center text-slate-400">
@@ -511,6 +574,17 @@ function PlanoGeral({
           onClose={() => setAddOpen(false)}
           onSaved={() => {
             setAddOpen(false);
+            onChanged();
+          }}
+        />
+      )}
+
+      {editar && (
+        <EditarInscricaoDialog
+          inscricao={editar}
+          onClose={() => setEditar(null)}
+          onSaved={() => {
+            setEditar(null);
             onChanged();
           }}
         />
@@ -1330,6 +1404,113 @@ function AddNecessidadeDialog({
           </Button>
           <Button variant="navy" disabled={saving} onClick={submit}>
             {saving ? "A guardar…" : "Adicionar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* --------------------- Dialog: editar inscrição -------------------------- */
+function EditarInscricaoDialog({
+  inscricao,
+  onClose,
+  onSaved,
+}: {
+  inscricao: Inscricao;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const c = inscricao.colaborador;
+  const [nome, setNome] = useState(c.nome);
+  const [funcao, setFuncao] = useState(c.funcao ?? "");
+  const [direcao, setDirecao] = useState(c.direcao ?? "");
+  const [area, setArea] = useState(c.area ?? "");
+  const [prioridade, setPrioridade] = useState(inscricao.prioridade ?? "");
+  const [motivo, setMotivo] = useState(inscricao.motivo ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!nome.trim()) {
+      toast.error("O nome é obrigatório");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api(`/api/plano-formativo/colaboradores/${c.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ nome, funcao, direcao, area }),
+      });
+      await api(`/api/plano-formativo/inscricoes/${inscricao.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ prioridade: prioridade || null, motivo }),
+      });
+      toast.success("Alterações guardadas");
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar — {inscricao.formacao.nome}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-1 block">Colaborador *</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+            <p className="mt-1 text-xs text-slate-400">
+              Editar aqui actualiza o colaborador em todos os anos do plano.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="mb-1 block">Função</Label>
+              <Input value={funcao} onChange={(e) => setFuncao(e.target.value)} />
+            </div>
+            <div>
+              <Label className="mb-1 block">Direcção</Label>
+              <Input value={direcao} onChange={(e) => setDirecao(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1 block">Área</Label>
+            <Input value={area} onChange={(e) => setArea(e.target.value)} />
+          </div>
+          <div>
+            <Label className="mb-1 block">Prioridade</Label>
+            <Select
+              value={prioridade || undefined}
+              onValueChange={(v) => setPrioridade(v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORIDADES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="mb-1 block">Motivo (porquê?)</Label>
+            <Textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="navy" disabled={saving} onClick={submit}>
+            {saving ? "A guardar…" : "Guardar"}
           </Button>
         </DialogFooter>
       </DialogContent>
