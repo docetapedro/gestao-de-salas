@@ -314,6 +314,14 @@ function PlanoGeral({
   const [agrupar, setAgrupar] = useState("none");
   const [addOpen, setAddOpen] = useState(false);
   const [editar, setEditar] = useState<Inscricao | null>(null);
+  const [fechados, setFechados] = useState<Set<string>>(new Set());
+
+  const toggleGrupo = (nome: string) =>
+    setFechados((s) => {
+      const n = new Set(s);
+      n.has(nome) ? n.delete(nome) : n.add(nome);
+      return n;
+    });
 
   const direcoes = useMemo(
     () =>
@@ -542,19 +550,32 @@ function PlanoGeral({
             </TableHeader>
             <TableBody>
               {grupos
-                ? grupos.map(([nome, itens]) => (
-                    <Fragment key={nome}>
-                      <TableRow className="bg-slate-50 hover:bg-slate-50">
-                        <TableCell
-                          colSpan={canManage ? 7 : 6}
-                          className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                ? grupos.map(([nome, itens]) => {
+                    const aberto = !fechados.has(nome);
+                    return (
+                      <Fragment key={nome}>
+                        <TableRow
+                          className="cursor-pointer bg-slate-50 hover:bg-slate-100"
+                          onClick={() => toggleGrupo(nome)}
                         >
-                          {nome} · {itens.length}
-                        </TableCell>
-                      </TableRow>
-                      {itens.map((i) => linha(i))}
-                    </Fragment>
-                  ))
+                          <TableCell
+                            colSpan={canManage ? 7 : 6}
+                            className="py-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                          >
+                            <span className="flex items-center gap-2">
+                              <ChevronDown
+                                className={`h-4 w-4 shrink-0 transition-transform ${
+                                  aberto ? "" : "-rotate-90"
+                                }`}
+                              />
+                              {nome} · {itens.length}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        {aberto && itens.map((i) => linha(i))}
+                      </Fragment>
+                    );
+                  })
                 : filtradas.map((i) => linha(i))}
               {filtradas.length === 0 && (
                 <TableRow>
@@ -619,6 +640,7 @@ function FormacoesTurmas({
     turma: Turma | null;
   } | null>(null);
   const [addFormandoFormacao, setAddFormandoFormacao] = useState<Formacao | null>(null);
+  const [editarFormacao, setEditarFormacao] = useState<Formacao | null>(null);
 
   const porFormacao = useMemo(() => {
     const m = new Map<string, Inscricao[]>();
@@ -708,6 +730,17 @@ function FormacoesTurmas({
 
             {isOpen && (
               <CardContent className="space-y-4 border-t border-slate-100 pt-4">
+                {canManage && (
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditarFormacao(f)}
+                    >
+                      <Pencil className="h-4 w-4" /> Editar formação
+                    </Button>
+                  </div>
+                )}
                 {/* Turmas */}
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-slate-700">Turmas</h4>
@@ -880,6 +913,17 @@ function FormacoesTurmas({
           onClose={() => setAddFormandoFormacao(null)}
           onSaved={() => {
             setAddFormandoFormacao(null);
+            onChanged();
+          }}
+        />
+      )}
+
+      {editarFormacao && (
+        <EditFormacaoDialog
+          formacao={editarFormacao}
+          onClose={() => setEditarFormacao(null)}
+          onSaved={() => {
+            setEditarFormacao(null);
             onChanged();
           }}
         />
@@ -1664,6 +1708,138 @@ function AddFormandoDialog({
           </Button>
           <Button variant="navy" disabled={saving || !colaboradorId} onClick={submit}>
             {saving ? "A guardar…" : "Adicionar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* --------------------- Dialog: editar formação --------------------------- */
+function EditFormacaoDialog({
+  formacao,
+  onClose,
+  onSaved,
+}: {
+  formacao: Formacao;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const NONE = "__none__";
+  const [nome, setNome] = useState(formacao.nome);
+  const [competencia, setCompetencia] = useState(formacao.competencia ?? "");
+  const [tipoAccao, setTipoAccao] = useState(formacao.tipoAccao ?? "");
+  const [pilar, setPilar] = useState(formacao.pilar ?? "");
+  const [area, setArea] = useState(formacao.area ?? "");
+  const [entidade, setEntidade] = useState(formacao.entidadeSugerida ?? "");
+  const [saving, setSaving] = useState(false);
+
+  // Inclui o valor actual como opção mesmo que venha de dados importados
+  // fora da lista canónica, para não o perder ao guardar.
+  const comItem = (lista: readonly string[], atual: string) =>
+    atual && !lista.includes(atual) ? [atual, ...lista] : [...lista];
+  const compOpts = comItem(COMPETENCIAS, competencia);
+  const tipoOpts = comItem(TIPOS_ACCAO, tipoAccao);
+
+  async function submit() {
+    if (!nome.trim()) {
+      toast.error("O nome é obrigatório");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api(`/api/plano-formativo/formacoes/${formacao.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          nome,
+          competencia: competencia || null,
+          tipoAccao: tipoAccao || null,
+          pilar: pilar || null,
+          area: area || null,
+          entidadeSugerida: entidade || null,
+        }),
+      });
+      toast.success("Formação actualizada");
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar formação</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-1 block">Nome *</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="mb-1 block">Competência</Label>
+              <Select
+                value={competencia || NONE}
+                onValueChange={(v) => setCompetencia(v === NONE ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Nenhuma —</SelectItem>
+                  {compOpts.map((o) => (
+                    <SelectItem key={o} value={o}>
+                      {o}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="mb-1 block">Tipo de acção</Label>
+              <Select
+                value={tipoAccao || NONE}
+                onValueChange={(v) => setTipoAccao(v === NONE ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Nenhum —</SelectItem>
+                  {tipoOpts.map((o) => (
+                    <SelectItem key={o} value={o}>
+                      {o}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="mb-1 block">Pilar</Label>
+              <Input value={pilar} onChange={(e) => setPilar(e.target.value)} />
+            </div>
+            <div>
+              <Label className="mb-1 block">Área</Label>
+              <Input value={area} onChange={(e) => setArea(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1 block">Entidade sugerida</Label>
+            <Input value={entidade} onChange={(e) => setEntidade(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="navy" disabled={saving} onClick={submit}>
+            {saving ? "A guardar…" : "Guardar"}
           </Button>
         </DialogFooter>
       </DialogContent>
