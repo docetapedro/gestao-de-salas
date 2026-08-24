@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/jwt";
 
 // Rotas públicas (não exigem sessão).
-const PUBLIC_PATHS = ["/login", "/agenda", "/q", "/v", "/t"];
+const PUBLIC_PATHS = ["/login", "/agenda", "/plano-trimestre", "/q", "/v", "/t"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
