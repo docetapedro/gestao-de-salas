@@ -1064,6 +1064,7 @@ function VisaoTrimestral({
   ano: number | null;
 }) {
   const [tri, setTri] = useState(() => trimestreDoMes(new Date().getMonth()));
+  const [detalhe, setDetalhe] = useState<TurmaFmt | null>(null);
   const meses = TRIMESTRES[tri - 1].meses;
 
   const colDe = (mes: number, dia: number) => {
@@ -1222,10 +1223,16 @@ function VisaoTrimestral({
               <tbody>
                 {rows.map(([nome, turmas]) => {
                   const cells = celulas(turmas);
+                  const formadores = [
+                    ...new Set(turmas.map((t) => t.formador?.trim()).filter(Boolean)),
+                  ].join(", ");
                   return (
                     <tr key={nome} className="hover:bg-slate-50/50">
                       <td className="sticky left-0 z-10 min-w-[220px] border-b border-r border-slate-200 bg-white p-2 text-slate-800">
-                        {nome}
+                        <div>{nome}</div>
+                        {formadores && (
+                          <div className="text-[11px] font-normal text-slate-500">{formadores}</div>
+                        )}
                       </td>
                       {cells.map((c, i) => (
                         <td
@@ -1235,16 +1242,18 @@ function VisaoTrimestral({
                           }`}
                         >
                           {c && (
-                            <div
-                              className={`truncate rounded px-1 py-1 text-[10px] font-medium ${
+                            <button
+                              type="button"
+                              onClick={() => setDetalhe(c.t)}
+                              className={`w-full cursor-pointer truncate rounded px-1 py-1 text-[10px] font-medium ${
                                 ESTADO_TURMA_BADGE[c.t.estado]
                               }`}
                               title={`${c.t.codigo ?? "Turma"} — ${ESTADO_TURMA_LABEL[c.t.estado]}${
                                 c.t.turno ? " · " + c.t.turno : ""
-                              }`}
+                              } (clicar para ver datas)`}
                             >
                               {c.inicio ? (c.t.codigo ?? "T") + (c.t.turno ? ` · ${c.t.turno}` : "") : "•"}
-                            </div>
+                            </button>
                           )}
                         </td>
                       ))}
@@ -1278,6 +1287,64 @@ function VisaoTrimestral({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {detalhe && (
+        <Dialog open onOpenChange={(o) => !o && setDetalhe(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>
+                {detalhe.formacaoNome}
+                {detalhe.codigo ? ` · ${detalhe.codigo}` : ""}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Badge className={ESTADO_TURMA_BADGE[detalhe.estado]}>
+                {ESTADO_TURMA_LABEL[detalhe.estado]}
+              </Badge>
+              <dl className="space-y-1 text-sm text-slate-600">
+                <div>
+                  <span className="text-slate-400">Início: </span>
+                  {detalhe.dataInicio
+                    ? new Date(detalhe.dataInicio).toLocaleDateString("pt-PT")
+                    : "—"}
+                </div>
+                <div>
+                  <span className="text-slate-400">Fim: </span>
+                  {detalhe.dataFim
+                    ? new Date(detalhe.dataFim).toLocaleDateString("pt-PT")
+                    : "—"}
+                </div>
+                <div>
+                  <span className="text-slate-400">Formador: </span>
+                  {detalhe.formador || "—"}
+                </div>
+                <div>
+                  <span className="text-slate-400">Fornecedor: </span>
+                  {detalhe.entidade || "—"}
+                </div>
+                <div>
+                  <span className="text-slate-400">Local: </span>
+                  {detalhe.local || "—"}
+                </div>
+                <div>
+                  <span className="text-slate-400">Carga/Turno: </span>
+                  {detalhe.duracaoHoras != null ? `${detalhe.duracaoHoras}h` : "—"}
+                  {detalhe.turno ? ` · ${detalhe.turno}` : ""}
+                </div>
+                <div>
+                  <span className="text-slate-400">Formandos: </span>
+                  {detalhe._count.inscricoes}
+                </div>
+              </dl>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDetalhe(null)}>
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -1358,17 +1425,22 @@ function AddNecessidadeDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const NOVA = "__nova__";
   const [nome, setNome] = useState("");
   const [funcao, setFuncao] = useState("");
   const [direcao, setDirecao] = useState("");
   const [area, setArea] = useState("");
   const [formacaoId, setFormacaoId] = useState("");
+  const [novaFormacao, setNovaFormacao] = useState("");
   const [prioridade, setPrioridade] = useState("");
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const criarNova = formacaoId === NOVA;
+
   async function submit() {
-    if (!nome.trim() || !formacaoId) {
+    const formacaoDefinida = criarNova ? novaFormacao.trim() : formacaoId;
+    if (!nome.trim() || !formacaoDefinida) {
       toast.error("Nome e formação são obrigatórios");
       return;
     }
@@ -1382,7 +1454,8 @@ function AddNecessidadeDialog({
           funcao,
           direcao,
           area,
-          formacaoId,
+          formacaoId: criarNova ? null : formacaoId,
+          formacaoNome: criarNova ? novaFormacao.trim() : null,
           prioridade: prioridade || null,
           motivo,
         }),
@@ -1428,6 +1501,7 @@ function AddNecessidadeDialog({
                 <SelectValue placeholder="Escolher formação…" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NOVA}>+ Nova formação…</SelectItem>
                 {formacoes.map((f) => (
                   <SelectItem key={f.id} value={f.id}>
                     {f.nome}
@@ -1435,6 +1509,15 @@ function AddNecessidadeDialog({
                 ))}
               </SelectContent>
             </Select>
+            {criarNova && (
+              <Input
+                className="mt-2"
+                autoFocus
+                placeholder="Nome da nova formação"
+                value={novaFormacao}
+                onChange={(e) => setNovaFormacao(e.target.value)}
+              />
+            )}
           </div>
           <div>
             <Label className="mb-1 block">Prioridade</Label>
