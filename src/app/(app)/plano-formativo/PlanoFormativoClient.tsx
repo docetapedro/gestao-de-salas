@@ -227,6 +227,7 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
             <PlanoGeral
               inscricoes={inscricoes}
               formacoes={formacoes}
+              colaboradores={colaboradores}
               canManage={canManage}
               planoId={planoId}
               onChanged={() => reload(ano)}
@@ -296,12 +297,14 @@ export default function PlanoFormativoClient({ canManage }: { canManage: boolean
 function PlanoGeral({
   inscricoes,
   formacoes,
+  colaboradores,
   canManage,
   planoId,
   onChanged,
 }: {
   inscricoes: Inscricao[];
   formacoes: Formacao[];
+  colaboradores: Colaborador[];
   canManage: boolean;
   planoId: string;
   onChanged: () => void;
@@ -592,6 +595,7 @@ function PlanoGeral({
       {addOpen && (
         <AddNecessidadeDialog
           formacoes={formacoes}
+          colaboradores={colaboradores}
           planoId={planoId}
           onClose={() => setAddOpen(false)}
           onSaved={() => {
@@ -604,6 +608,7 @@ function PlanoGeral({
       {editar && (
         <EditarInscricaoDialog
           inscricao={editar}
+          colaboradores={colaboradores}
           onClose={() => setEditar(null)}
           onSaved={() => {
             setEditar(null);
@@ -1413,19 +1418,84 @@ function InlineSelect({
   );
 }
 
+// Campo que deixa escolher um valor já existente ou escrever um novo.
+function ComboComOutro({
+  label,
+  required,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+}) {
+  const NOVO = "__novo__";
+  const [criar, setCriar] = useState(!!value && !options.includes(value));
+  return (
+    <div>
+      <Label className="mb-1 block">
+        {label}
+        {required ? " *" : ""}
+      </Label>
+      <Select
+        value={criar ? NOVO : value || undefined}
+        onValueChange={(v) => {
+          if (v === NOVO) {
+            setCriar(true);
+            onChange("");
+          } else {
+            setCriar(false);
+            onChange(v);
+          }
+        }}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={placeholder ?? "Escolher…"} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NOVO}>+ Novo…</SelectItem>
+          {options.map((o) => (
+            <SelectItem key={o} value={o}>
+              {o}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {criar && (
+        <Input
+          className="mt-2"
+          autoFocus
+          placeholder={`Escrever ${label.toLowerCase()}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ----------------------- Dialog: nova necessidade ------------------------ */
 function AddNecessidadeDialog({
   formacoes,
+  colaboradores,
   planoId,
   onClose,
   onSaved,
 }: {
   formacoes: Formacao[];
+  colaboradores: Colaborador[];
   planoId: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const NOVA = "__nova__";
+  const NOVO_COLAB = "__novo__";
+  const [colaboradorSel, setColaboradorSel] = useState("");
   const [nome, setNome] = useState("");
   const [funcao, setFuncao] = useState("");
   const [direcao, setDirecao] = useState("");
@@ -1437,6 +1507,44 @@ function AddNecessidadeDialog({
   const [saving, setSaving] = useState(false);
 
   const criarNova = formacaoId === NOVA;
+  const novoColab = colaboradorSel === NOVO_COLAB || colaboradorSel === "";
+
+  const colaboradoresOrd = useMemo(
+    () => [...colaboradores].sort((a, b) => a.nome.localeCompare(b.nome, "pt")),
+    [colaboradores]
+  );
+  const direcoesOpts = useMemo(
+    () =>
+      [...new Set(colaboradores.map((c) => c.direcao?.trim()).filter(Boolean))].sort((a, b) =>
+        (a as string).localeCompare(b as string, "pt")
+      ) as string[],
+    [colaboradores]
+  );
+  const areasOpts = useMemo(
+    () =>
+      [...new Set(colaboradores.map((c) => c.area?.trim()).filter(Boolean))].sort((a, b) =>
+        (a as string).localeCompare(b as string, "pt")
+      ) as string[],
+    [colaboradores]
+  );
+
+  function escolherColaborador(v: string) {
+    setColaboradorSel(v);
+    if (v === NOVO_COLAB) {
+      setNome("");
+      setFuncao("");
+      setDirecao("");
+      setArea("");
+      return;
+    }
+    const c = colaboradores.find((x) => x.id === v);
+    if (c) {
+      setNome(c.nome);
+      setFuncao(c.funcao ?? "");
+      setDirecao(c.direcao ?? "");
+      setArea(c.area ?? "");
+    }
+  }
 
   async function submit() {
     const formacaoDefinida = criarNova ? novaFormacao.trim() : formacaoId;
@@ -1478,22 +1586,43 @@ function AddNecessidadeDialog({
         <div className="space-y-3">
           <div>
             <Label className="mb-1 block">Colaborador *</Label>
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+            <Select value={colaboradorSel || undefined} onValueChange={escolherColaborador}>
+              <SelectTrigger>
+                <SelectValue placeholder="Escolher colaborador…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NOVO_COLAB}>+ Novo colaborador…</SelectItem>
+                {colaboradoresOrd.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.nome}
+                    {c.direcao ? ` · ${c.direcao}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {novoColab && (
+              <Input
+                className="mt-2"
+                autoFocus
+                placeholder="Nome do novo colaborador"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+              />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="mb-1 block">Função</Label>
               <Input value={funcao} onChange={(e) => setFuncao(e.target.value)} />
             </div>
-            <div>
-              <Label className="mb-1 block">Direcção</Label>
-              <Input value={direcao} onChange={(e) => setDirecao(e.target.value)} />
-            </div>
+            <ComboComOutro
+              label="Direcção"
+              value={direcao}
+              onChange={setDirecao}
+              options={direcoesOpts}
+            />
           </div>
-          <div>
-            <Label className="mb-1 block">Área</Label>
-            <Input value={area} onChange={(e) => setArea(e.target.value)} />
-          </div>
+          <ComboComOutro label="Área" value={area} onChange={setArea} options={areasOpts} />
           <div>
             <Label className="mb-1 block">Formação *</Label>
             <Select value={formacaoId} onValueChange={setFormacaoId}>
@@ -1555,14 +1684,30 @@ function AddNecessidadeDialog({
 /* --------------------- Dialog: editar inscrição -------------------------- */
 function EditarInscricaoDialog({
   inscricao,
+  colaboradores,
   onClose,
   onSaved,
 }: {
   inscricao: Inscricao;
+  colaboradores: Colaborador[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const c = inscricao.colaborador;
+  const direcoesOpts = useMemo(
+    () =>
+      [...new Set(colaboradores.map((x) => x.direcao?.trim()).filter(Boolean))].sort((a, b) =>
+        (a as string).localeCompare(b as string, "pt")
+      ) as string[],
+    [colaboradores]
+  );
+  const areasOpts = useMemo(
+    () =>
+      [...new Set(colaboradores.map((x) => x.area?.trim()).filter(Boolean))].sort((a, b) =>
+        (a as string).localeCompare(b as string, "pt")
+      ) as string[],
+    [colaboradores]
+  );
   const [nome, setNome] = useState(c.nome);
   const [funcao, setFuncao] = useState(c.funcao ?? "");
   const [direcao, setDirecao] = useState(c.direcao ?? "");
@@ -1614,15 +1759,14 @@ function EditarInscricaoDialog({
               <Label className="mb-1 block">Função</Label>
               <Input value={funcao} onChange={(e) => setFuncao(e.target.value)} />
             </div>
-            <div>
-              <Label className="mb-1 block">Direcção</Label>
-              <Input value={direcao} onChange={(e) => setDirecao(e.target.value)} />
-            </div>
+            <ComboComOutro
+              label="Direcção"
+              value={direcao}
+              onChange={setDirecao}
+              options={direcoesOpts}
+            />
           </div>
-          <div>
-            <Label className="mb-1 block">Área</Label>
-            <Input value={area} onChange={(e) => setArea(e.target.value)} />
-          </div>
+          <ComboComOutro label="Área" value={area} onChange={setArea} options={areasOpts} />
           <div>
             <Label className="mb-1 block">Prioridade</Label>
             <Select
