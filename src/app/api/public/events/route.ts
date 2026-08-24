@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { json, handleError } from "@/lib/http";
+import { getEventosPublicosCached } from "@/lib/agenda-cache";
 
 // Leitura pública (sem sessão) dos eventos num intervalo — usada pela agenda
-// pública. Só devolve os campos necessários para a grade (sem createdBy).
+// pública. Servida do Data Cache; só toca no Neon quando o cache é invalidado.
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -11,28 +11,7 @@ export async function GET(req: NextRequest) {
     const to = searchParams.get("to");
     const roomId = searchParams.get("roomId");
 
-    const where: Record<string, unknown> = {};
-    if (roomId) where.roomId = roomId;
-    if (from || to) {
-      // Eventos que tocam o intervalo [from, to].
-      where.AND = [
-        from ? { endAt: { gte: new Date(from) } } : {},
-        to ? { startAt: { lte: new Date(to) } } : {},
-      ];
-    }
-
-    const events = await prisma.event.findMany({
-      where,
-      orderBy: { startAt: "asc" },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        startAt: true,
-        endAt: true,
-        room: { select: { id: true, name: true, color: true } },
-      },
-    });
+    const events = await getEventosPublicosCached(from, to, roomId);
     return json({ events });
   } catch (err) {
     return handleError(err);

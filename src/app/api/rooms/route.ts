@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
+import { TAGS } from "@/lib/agenda-cache";
+import { revalidateTag } from "next/cache";
 
 export async function GET() {
   try {
@@ -32,6 +34,8 @@ export async function POST(req: NextRequest) {
         active: body.active === undefined ? true : Boolean(body.active),
       },
     });
+    revalidateTag(TAGS.rooms); // atualiza a agenda pública
+    revalidateTag(TAGS.events); // os eventos incluem nome/cor da sala
     return json({ room }, 201);
   } catch (err) {
     return handleError(err);

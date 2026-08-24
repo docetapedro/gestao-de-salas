@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
+import { TAGS } from "@/lib/agenda-cache";
+import { revalidateTag } from "next/cache";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -32,6 +34,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
         active: body.active !== undefined ? Boolean(body.active) : undefined,
       },
     });
+    revalidateTag(TAGS.rooms); // atualiza a agenda pública
+    revalidateTag(TAGS.events); // os eventos incluem nome/cor da sala
     return json({ room });
   } catch (err) {
     return handleError(err);
@@ -43,6 +47,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     assertCan(await getSession(), "salas", "manage");
     const { id } = await params;
     await prisma.room.delete({ where: { id } });
+    revalidateTag(TAGS.rooms); // atualiza a agenda pública
+    revalidateTag(TAGS.events); // os eventos incluem nome/cor da sala
     return json({ ok: true });
   } catch (err) {
     return handleError(err);

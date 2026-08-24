@@ -11,6 +11,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useLivePoll } from "@/lib/useLivePoll";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1214,11 +1215,8 @@ function QuizControloModal({
     }
   }, [dinamica.id]);
 
-  useEffect(() => {
-    carregarSubs();
-    const t = setInterval(carregarSubs, 4000);
-    return () => clearInterval(t);
-  }, [carregarSubs]);
+  // Pára quando o separador está escondido/fechado (não usa compute à toa).
+  useLivePoll(carregarSubs, 4000);
 
   async function toggleAberto() {
     const novo = !aberto;
@@ -1572,11 +1570,8 @@ function GritoControloModal({
     }
   }, [dinamica.id]);
 
-  useEffect(() => {
-    carregarVotos();
-    const t = setInterval(carregarVotos, 4000);
-    return () => clearInterval(t);
-  }, [carregarVotos]);
+  // Pára quando o separador está escondido/fechado (não usa compute à toa).
+  useLivePoll(carregarVotos, 4000);
 
   // Nome/cor por equipa (resolvido a partir dos votos observados).
   const infoEquipa = useMemo(() => {
@@ -1944,11 +1939,8 @@ function BauProjecao({
     }
   }, [dinamica.id]);
 
-  useEffect(() => {
-    carregar();
-    const t = setInterval(carregar, 3000);
-    return () => clearInterval(t);
-  }, [carregar]);
+  // Pára quando o separador está escondido/fechado (não usa compute à toa).
+  useLivePoll(carregar, 3000);
 
   async function repor() {
     setRepondo(true);

@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { findConflict } from "@/lib/events";
+import { TAGS } from "@/lib/agenda-cache";
+import { revalidateTag } from "next/cache";
 import { randomUUID } from "crypto";
 
 export async function GET(req: NextRequest) {
@@ -94,6 +96,7 @@ export async function POST(req: NextRequest) {
         data: { title, description, roomId, startAt, endAt, createdById: session.sub },
         include: { room: { select: { id: true, name: true, color: true } } },
       });
+      revalidateTag(TAGS.events); // atualiza a agenda pública
       return json({ event }, 201);
     }
 
@@ -136,6 +139,7 @@ export async function POST(req: NextRequest) {
     }
     if (toCreate.length > 0) {
       await prisma.event.createMany({ data: toCreate });
+      revalidateTag(TAGS.events); // atualiza a agenda pública
     }
     return json(
       { created: toCreate.length, skipped, total: occ.length, seriesId },

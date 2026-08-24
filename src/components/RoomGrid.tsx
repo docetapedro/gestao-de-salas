@@ -6,6 +6,7 @@ import { ptBR } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { useLivePoll } from "@/lib/useLivePoll";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -184,12 +185,15 @@ export default function RoomGrid({
     try {
       const roomsUrl = publicMode ? "/api/public/rooms" : "/api/rooms";
       const eventsBase = publicMode ? "/api/public/events" : "/api/events";
+      // no-store: obriga a ir ao servidor a cada poll (que serve do Data Cache,
+      // sem tocar no Neon), para não ficar preso a uma resposta em cache do browser.
       const [r, e] = await Promise.all([
-        api<{ rooms: Room[] }>(roomsUrl),
+        api<{ rooms: Room[] }>(roomsUrl, { cache: "no-store" }),
         api<{ events: EventItem[] }>(
           `${eventsBase}?from=${encodeURIComponent(
             range.from.toISOString()
-          )}&to=${encodeURIComponent(range.to.toISOString())}`
+          )}&to=${encodeURIComponent(range.to.toISOString())}`,
+          { cache: "no-store" }
         ),
       ]);
       setRooms(r.rooms.filter((x) => x.active));
@@ -206,10 +210,12 @@ export default function RoomGrid({
   useEffect(() => {
     firstLoad.current = true;
     setLoading(true);
-    load();
-    const t = setInterval(load, POLL_MS);
-    return () => clearInterval(t);
   }, [load]);
+
+  // As leituras públicas vêm do cache (revalidadas ao criar/editar/eliminar),
+  // por isso o polling não gasta compute do Neon. Só pára quando o separador
+  // está escondido — o quadro da entrada fica vivo 24/7.
+  useLivePoll(load, POLL_MS);
 
   // Relógio ao vivo (para o modo TV) + base de tempo para o "próximo evento".
   useEffect(() => {

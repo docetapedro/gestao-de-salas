@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
 import { findConflict } from "@/lib/events";
+import { TAGS } from "@/lib/agenda-cache";
+import { revalidateTag } from "next/cache";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -55,6 +57,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         room: { select: { id: true, name: true, color: true } },
       },
     });
+    revalidateTag(TAGS.events); // atualiza a agenda pública
     return json({ event });
   } catch (err) {
     return handleError(err);
@@ -77,11 +80,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         const r = await prisma.event.deleteMany({
           where: { seriesId: ev.seriesId },
         });
+        revalidateTag(TAGS.events); // atualiza a agenda pública
         return json({ ok: true, deleted: r.count });
       }
     }
 
     await prisma.event.delete({ where: { id } });
+    revalidateTag(TAGS.events); // atualiza a agenda pública
     return json({ ok: true, deleted: 1 });
   } catch (err) {
     return handleError(err);

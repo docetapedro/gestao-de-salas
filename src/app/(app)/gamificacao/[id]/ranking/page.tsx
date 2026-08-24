@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useLivePoll } from "@/lib/useLivePoll";
 import { Crown, Maximize, Minimize, RefreshCw, Trophy, X } from "lucide-react";
 
 type LinhaRanking = {
@@ -89,11 +90,8 @@ export default function RankingProjecaoPage({
     }
   }, [id]);
 
-  useEffect(() => {
-    carregar();
-    const t = setInterval(carregar, POLL_MS);
-    return () => clearInterval(t);
-  }, [carregar]);
+  // Só actualiza enquanto o separador está visível; ao esconder/fechar, pára.
+  useLivePoll(carregar, POLL_MS);
 
   useEffect(() => {
     const onFs = () => setFs(!!document.fullscreenElement);
