@@ -75,7 +75,7 @@ type Projeto = {
   local: { name: string } | null;
   locais: { local: { name: string } }[];
   formadores: { formador: { nome: string; tipo: string } }[];
-  participantes: { origem: string | null; tipo: string; quantidade: number; concluidos: number }[];
+  participantes: { origem: string | null; tipo: string; quantidade: number; concluidos: number; pago: boolean }[];
   financeiro: { previsto: number; realizado: number; rubrica: { nome: string; tipo: string } }[];
   turmas: Turma[];
 };
@@ -119,6 +119,12 @@ export default function RelatorioPage({
     return <div className="text-muted-foreground">Carregando…</div>;
 
   const fin = ind.financeiro;
+
+  // Só informativo: total de formandos que entraram por oferta (não pagos).
+  // NÃO entra em nenhum cálculo (inscritos, break-even, ROI, etc.).
+  const totalOferta = projeto.participantes
+    .filter((p) => p.pago === false)
+    .reduce((sum, p) => sum + (p.quantidade ?? 1), 0);
 
   // Participantes agrupados por origem.
   const porOrigem = new Map<string, { inscritos: number; concluidos: number }>();
@@ -193,7 +199,12 @@ export default function RelatorioPage({
 
         {/* Cartões KPI */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-          <Kpi label="Formandos Inscritos" value={String(ind.inscritos)} Icon={Users} />
+          <Kpi
+            label="Formandos Inscritos"
+            value={String(ind.inscritos)}
+            Icon={Users}
+            sub={`Total Oferta: ${totalOferta}`}
+          />
           <Kpi
             label="Taxa de Conclusão"
             value={formatPct(ind.qualidade.taxaConclusao.valor, 0)}
@@ -426,12 +437,14 @@ function Kpi({
   Icon,
   ok,
   green,
+  sub,
 }: {
   label: string;
   value: string;
   Icon: LucideIcon;
   ok?: boolean | null;
   green?: boolean;
+  sub?: string;
 }) {
   const toneName =
     green || ok === true ? "emerald" : ok === false ? "rose" : "indigo";
@@ -461,6 +474,11 @@ function Kpi({
           <div className={cn("truncate text-lg font-extrabold leading-tight", t.value)}>
             {value}
           </div>
+          {sub && (
+            <div className="truncate text-[10px] font-medium text-slate-400">
+              {sub}
+            </div>
+          )}
         </div>
       </div>
     </div>

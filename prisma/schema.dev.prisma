@@ -258,6 +258,9 @@ model Participante {
   telefone  String?
   email     String?
   concluidos Int     @default(0) // nº de formandos do grupo que concluíram (0..quantidade)
+  // Só informativo: se false, este grupo entrou por oferta (não pago). NÃO
+  // entra em nenhum cálculo (inscritos, break-even, ROI, etc.).
+  pago      Boolean @default(true)
   // DEPRECADO: substituído por `concluidos`. Mantido só para o deploy não
   // apagar a coluna em produção (evita perda de dados no `db push`). Não usar.
   concluido Boolean @default(false)

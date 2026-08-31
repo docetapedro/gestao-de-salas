@@ -99,6 +99,8 @@ export function participantesCreate(body: any) {
         origem: str(p.origem),
         quantidade,
         concluidos,
+        // Só informativo (oferta). Não entra em nenhum cálculo.
+        pago: p.pago === undefined ? true : Boolean(p.pago),
         descricao: str(p.descricao),
         telefone: str(p.telefone),
         email: str(p.email),

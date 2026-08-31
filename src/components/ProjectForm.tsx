@@ -28,6 +28,7 @@ type Participante = {
   tipo: string;
   quantidade: number;
   concluidos: number;
+  pago: boolean;
 };
 
 export type ProjectInitial = {
@@ -128,6 +129,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
       tipo: p.tipo,
       quantidade: p.quantidade ?? 1,
       concluidos: p.concluidos ?? 0,
+      pago: p.pago ?? true,
     })) ?? []
   );
   const [fin, setFin] = useState<Record<string, { previsto: string; realizado: string }>>(
@@ -191,7 +193,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
   function addParticipante() {
     setParticipantes((p) => [
       ...p,
-      { origem: "", tipo: "B2C", quantidade: 1, concluidos: 0 },
+      { origem: "", tipo: "B2C", quantidade: 1, concluidos: 0, pago: true },
     ]);
   }
   function updParticipante(i: number, patch: Partial<Participante>) {
@@ -500,10 +502,11 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
         <div className="space-y-2">
           {participantes.length > 0 && (
             <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              <span className="col-span-5">Empresa / Origem</span>
+              <span className="col-span-4">Empresa / Origem</span>
               <span className="col-span-2">Tipo</span>
               <span className="col-span-2">Qtd</span>
               <span className="col-span-2">Concluídos</span>
+              <span className="col-span-1 text-center">Pago</span>
               <span className="col-span-1" />
             </div>
           )}
@@ -513,7 +516,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
               className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center rounded-lg border border-slate-200 p-2"
             >
               <Input
-                className="md:col-span-5"
+                className="md:col-span-4"
                 placeholder="Empresa / Origem"
                 value={p.origem}
                 onChange={(e) => updParticipante(i, { origem: e.target.value })}
@@ -555,6 +558,18 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
                   })
                 }
               />
+              <label
+                className="flex items-center justify-center md:col-span-1"
+                title="Marque se este grupo pagou; desmarcado = oferta"
+              >
+                <span className="text-xs text-slate-500 md:hidden mr-2">Pago</span>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-navy focus:ring-2 focus:ring-ring"
+                  checked={p.pago}
+                  onChange={(e) => updParticipante(i, { pago: e.target.checked })}
+                />
+              </label>
               <Button
                 type="button"
                 variant="link"
