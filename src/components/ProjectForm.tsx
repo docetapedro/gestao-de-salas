@@ -445,13 +445,6 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
               ))}
             </select>
           </Field>
-          <Field label="Seleção do Formador">
-            <Input
-              placeholder="Ex.: Múltipla escolha"
-              value={form.selecaoFormador}
-              onChange={(e) => set("selecaoFormador", e.target.value)}
-            />
-          </Field>
           <Field label="Formador interno?" full>
             <label className="flex items-center gap-2 text-sm text-slate-700 mt-1">
               <input
