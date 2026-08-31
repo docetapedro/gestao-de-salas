@@ -43,7 +43,6 @@ export function projectScalars(body: any): Prisma.ProjectUncheckedCreateInput {
     codigoTurma: str(body.codigoTurma),
     clienteId: str(body.clienteId),
     pilarId: str(body.pilarId),
-    localId: str(body.localId),
     dataInicio: parseDate(body.dataInicio),
     dataFim: parseDate(body.dataFim),
     duracaoHoras: parseNum(body.duracaoHoras),
@@ -73,6 +72,15 @@ export function formadoresCreate(body: any) {
   return ids
     .filter((id) => typeof id === "string" && id)
     .map((formadorId) => ({ formadorId }));
+}
+
+/** Locais / salas do projecto (N:N). Aceita `localIds` e ignora duplicados. */
+export function locaisCreate(body: any) {
+  const ids: string[] = Array.isArray(body.localIds) ? body.localIds : [];
+  const unicos = Array.from(
+    new Set(ids.filter((id) => typeof id === "string" && id))
+  );
+  return unicos.map((localId) => ({ localId }));
 }
 
 export function participantesCreate(body: any) {
@@ -129,6 +137,7 @@ export function turmasCreate(body: any) {
 export const projectInclude = {
   pilar: true,
   local: true,
+  locais: { include: { local: true }, orderBy: { local: { name: "asc" } } },
   cliente: true,
   formadores: { include: { formador: true } },
   participantes: { orderBy: { origem: "asc" } },

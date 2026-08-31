@@ -6,6 +6,7 @@ import { json, handleError } from "@/lib/http";
 import {
   projectScalars,
   formadoresCreate,
+  locaisCreate,
   participantesCreate,
   turmasCreate,
   nextProjectCodigo,
@@ -19,6 +20,7 @@ export async function GET() {
       include: {
         pilar: true,
         local: true,
+        locais: { include: { local: true }, orderBy: { local: { name: "asc" } } },
         cliente: true,
         participantes: { select: { quantidade: true } },
       },
@@ -47,6 +49,7 @@ export async function POST(req: NextRequest) {
         codigo: await nextProjectCodigo(),
         createdById: session.sub,
         formadores: { create: formadoresCreate(body) },
+        locais: { create: locaisCreate(body) },
         participantes: { create: participantesCreate(body) },
         turmas: { create: turmasCreate(body) },
       },

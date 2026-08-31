@@ -35,6 +35,7 @@ type Projeto = {
   dataInicio: string | null;
   pilar: { nome: string } | null;
   local: { name: string } | null;
+  locais: { local: { name: string } }[];
   inscritos: number;
 };
 

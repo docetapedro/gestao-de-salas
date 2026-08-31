@@ -7,6 +7,7 @@ import { calcularIndicadores } from "@/lib/projetos";
 import {
   projectScalars,
   formadoresCreate,
+  locaisCreate,
   participantesCreate,
   projectInclude,
 } from "../_shared";
@@ -41,12 +42,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
     // turmas NÃO são tocados aqui — passam a ser geridos por turma no detalhe.
     const projeto = await prisma.$transaction(async (tx) => {
       await tx.projectFormador.deleteMany({ where: { projectId: id } });
+      await tx.projectLocal.deleteMany({ where: { projectId: id } });
       await tx.participante.deleteMany({ where: { projectId: id } });
       return tx.project.update({
         where: { id },
         data: {
           ...scalars,
+          // Coluna legada deixa de ser usada; o local passa a viver em `locais`.
+          localId: null,
           formadores: { create: formadoresCreate(body) },
+          locais: { create: locaisCreate(body) },
           participantes: { create: participantesCreate(body) },
         },
       });

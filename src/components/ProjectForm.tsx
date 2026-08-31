@@ -39,7 +39,7 @@ export type ProjectInitial = {
   codigoTurma: string | null;
   clienteId: string | null;
   pilarId: string | null;
-  localId: string | null;
+  locais: { localId: string }[];
   dataInicio: string | null;
   dataFim: string | null;
   duracaoHoras: number | null;
@@ -94,7 +94,6 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
     codigoTurma: s(initial?.codigoTurma),
     clienteId: s(initial?.clienteId),
     pilarId: s(initial?.pilarId),
-    localId: s(initial?.localId),
     dataInicio: dateInput(initial?.dataInicio),
     dataFim: dateInput(initial?.dataFim),
     duracaoHoras: n(initial?.duracaoHoras),
@@ -119,6 +118,9 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
 
   const [formadorIds, setFormadorIds] = useState<string[]>(
     initial?.formadores.map((f) => f.formadorId) ?? []
+  );
+  const [localIds, setLocalIds] = useState<string[]>(
+    initial?.locais.map((l) => l.localId) ?? []
   );
   const [participantes, setParticipantes] = useState<Participante[]>(
     initial?.participantes.map((p) => ({
@@ -228,6 +230,7 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
         avAplicabilidade:
           form.avAplicabilidade === "" ? null : Number(form.avAplicabilidade),
         formadorIds,
+        localIds,
         participantes: participantes.filter((p) => p.origem.trim() && p.quantidade > 0),
         financeiro,
       };
@@ -361,19 +364,40 @@ export default function ProjectForm({ initial }: { initial?: ProjectInitial }) {
               </p>
             )}
           </Field>
-          <Field label="Local / Sala">
-            <select
-              className={selectClass}
-              value={form.localId}
-              onChange={(e) => set("localId", e.target.value)}
-            >
-              <option value="">—</option>
-              {locais.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.nome}
-                </option>
-              ))}
-            </select>
+          <Field label="Locais / Salas" full>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {locais.length === 0 && (
+                <span className="text-sm text-slate-400">
+                  Nenhuma sala cadastrada ainda (adicione em Salas).
+                </span>
+              )}
+              {locais.map((l) => {
+                const on = localIds.includes(l.id);
+                return (
+                  <button
+                    type="button"
+                    key={l.id}
+                    onClick={() =>
+                      setLocalIds((ids) =>
+                        on ? ids.filter((x) => x !== l.id) : [...ids, l.id]
+                      )
+                    }
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-sm border transition-colors",
+                      on
+                        ? "bg-navy text-white border-navy"
+                        : "bg-white text-slate-600 border-slate-300 hover:border-navy"
+                    )}
+                  >
+                    {l.nome}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Um projecto pode decorrer em vários locais — selecione todos os
+              aplicáveis.
+            </p>
           </Field>
           <Field label="Data de Início">
             <DatePicker

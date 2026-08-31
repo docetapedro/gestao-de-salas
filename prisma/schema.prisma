@@ -62,6 +62,8 @@ model Room {
 
   events   Event[]
   projects Project[]
+  // Projectos que decorrem neste local (N:N — um projecto pode ter vários locais).
+  projectLocais ProjectLocal[]
 }
 
 model Event {
@@ -137,6 +139,8 @@ model Project {
   pilarId String?
   pilar   Pilar?  @relation(fields: [pilarId], references: [id], onDelete: SetNull)
   // "Local / Sala" reutiliza a tabela de Salas (Room) já existente.
+  // Coluna legada: primeiro local escolhido (mantida por compatibilidade; a
+  // fonte de verdade passou a ser a relação N:N `locais`). Ver ProjectLocal.
   localId String?
   local   Room?   @relation(fields: [localId], references: [id], onDelete: SetNull)
   // Cliente da formação (tabela própria).
@@ -177,6 +181,8 @@ model Project {
   participantes Participante[]
   financeiro    FinanceiroItem[]
   turmas        Turma[]
+  // Locais / salas onde o projecto decorre (N:N).
+  locais        ProjectLocal[]
 
   @@index([pilarId])
   @@index([localId])
@@ -227,6 +233,19 @@ model ProjectFormador {
 
   @@unique([projectId, formadorId])
   @@index([projectId])
+}
+
+// Ligação N:N entre projecto e locais/salas (um projecto pode decorrer em vários).
+model ProjectLocal {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  localId   String
+  local     Room    @relation(fields: [localId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, localId])
+  @@index([projectId])
+  @@index([localId])
 }
 
 // Participante / formando inscrito num projecto.

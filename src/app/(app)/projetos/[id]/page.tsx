@@ -73,6 +73,7 @@ type Projeto = {
   responsavelPedagogica: string | null;
   pilar: { nome: string } | null;
   local: { name: string } | null;
+  locais: { local: { name: string } }[];
   formadores: { formador: { nome: string; tipo: string } }[];
   participantes: { origem: string | null; tipo: string; quantidade: number; concluidos: number }[];
   financeiro: { previsto: number; realizado: number; rubrica: { nome: string; tipo: string } }[];
@@ -243,7 +244,14 @@ export default function RelatorioPage({
               v={projeto.duracaoHoras !== null ? String(projeto.duracaoHoras) : "—"}
             />
             <Linha k="Modalidade" v={projeto.modalidade || "—"} />
-            <Linha k="Local / Sala" v={projeto.local?.name || "—"} />
+            <Linha
+              k="Locais / Salas"
+              v={
+                projeto.locais.length > 0
+                  ? projeto.locais.map((l) => l.local.name).join(", ")
+                  : projeto.local?.name || "—"
+              }
+            />
             <Linha k="Cliente" v={projeto.cliente?.nome || "—"} />
             <Linha
               k="Formador / Corpo Técnico"

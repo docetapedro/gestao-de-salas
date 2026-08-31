@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate --schema prisma/schema.prisma && prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss && tsx prisma/backfill-codigo.ts && tsx prisma/backfill-turmas.ts && tsx prisma/backfill-perfis.ts && tsx prisma/backfill-grito-pontos.ts && next build",
+    "build": "prisma generate --schema prisma/schema.prisma && prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss && tsx prisma/backfill-codigo.ts && tsx prisma/backfill-turmas.ts && tsx prisma/backfill-perfis.ts && tsx prisma/backfill-grito-pontos.ts && tsx prisma/backfill-projeto-locais.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate --schema prisma/schema.prisma",
@@ -15,6 +15,7 @@
     "db:backfill:codigo": "tsx prisma/backfill-codigo.ts",
     "db:backfill:turmas": "tsx prisma/backfill-turmas.ts",
     "db:backfill:perfis": "tsx prisma/backfill-perfis.ts",
+    "db:backfill:locais": "tsx prisma/backfill-projeto-locais.ts",
     "db:dev:generate": "prisma generate --schema prisma/schema.dev.prisma",
     "db:dev:push": "prisma db push --schema prisma/schema.dev.prisma",
     "db:dev:setup": "prisma generate --schema prisma/schema.dev.prisma && prisma db push --schema prisma/schema.dev.prisma && tsx prisma/seed.ts",
