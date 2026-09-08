@@ -25,6 +25,8 @@ export type IndicadorRow = {
   valor: number;
   limite: number;
   detalhes: string | null;
+  ano: number;
+  mes: number;
   filhos: Filho[];
 };
 
@@ -71,9 +73,9 @@ export function IndicadorChart({ i }: { i: IndicadorRow }) {
             dataKey="value"
             nameKey="name"
             outerRadius="75%"
-            label={(p: { name?: string; value?: number }) => {
-              if (p.name === "Restante") return "";
-              const v = p.value ?? 0;
+            label={(p: any) => {
+              if (p?.name === "Restante") return "";
+              const v = Number(p?.value) || 0;
               const pct = total > 0 ? Math.round((v / total) * 100) : 0;
               return `${fmt(v)} (${pct}%)`;
             }}
@@ -86,7 +88,7 @@ export function IndicadorChart({ i }: { i: IndicadorRow }) {
             formatter={(value) => (value === "Restante" ? "" : value)}
             verticalAlign="bottom"
           />
-          <Tooltip formatter={(v: number) => fmt(v)} />
+          <Tooltip formatter={(v) => fmt(Number(v))} />
         </PieChart>
       </ResponsiveContainer>
     );
@@ -104,12 +106,12 @@ export function IndicadorChart({ i }: { i: IndicadorRow }) {
         <LineChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
           <XAxis dataKey="name" tick={{ fontSize: 11 }} />
           <YAxis domain={[0, max]} tick={{ fontSize: 11 }} width={44} />
-          <Tooltip formatter={(v: number) => fmt(v)} />
+          <Tooltip formatter={(v) => fmt(Number(v))} />
           <Line type="monotone" dataKey="value" stroke="#36a2eb" strokeWidth={2} dot>
             <LabelList
               dataKey="value"
               position="top"
-              formatter={(v: number) => fmt(v)}
+              formatter={(v: any) => fmt(Number(v))}
               style={{ fontSize: 11, fontWeight: 700 }}
             />
           </Line>
@@ -124,7 +126,7 @@ export function IndicadorChart({ i }: { i: IndicadorRow }) {
       <BarChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
         <YAxis domain={[0, max]} tick={{ fontSize: 11 }} width={44} />
-        <Tooltip formatter={(v: number) => fmt(v)} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+        <Tooltip formatter={(v) => fmt(Number(v))} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
           {data.map((_, idx) => (
             <Cell key={idx} fill={CORES[idx % CORES.length]} />
@@ -132,7 +134,7 @@ export function IndicadorChart({ i }: { i: IndicadorRow }) {
           <LabelList
             dataKey="value"
             position="top"
-            formatter={(v: number) => fmt(v)}
+            formatter={(v: any) => fmt(Number(v))}
             style={{ fontSize: 11, fontWeight: 700 }}
           />
         </Bar>
