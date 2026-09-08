@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { TrendingUp, TrendingDown, Coins, Wallet, PiggyBank, Users } from "lucide-react";
+import { TrendingUp, TrendingDown, Coins, Wallet, PiggyBank, Percent } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatNum, formatPct } from "@/lib/projetos";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,15 @@ export default function AnalyticsProjetosPage() {
     return (totais.margem.realizado / totais.receita.realizado) * 100;
   }, [totais]);
 
+  // ROI Médio = média dos ROI por projecto (só os que têm custo realizado > 0).
+  const roi = useMemo(() => {
+    const valores = (dados?.projetos ?? [])
+      .map((p) => p.roiPct)
+      .filter((x): x is number => x !== null && !Number.isNaN(x));
+    if (valores.length === 0) return { medio: null as number | null, n: 0 };
+    return { medio: valores.reduce((a, b) => a + b, 0) / valores.length, n: valores.length };
+  }, [dados]);
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -169,7 +178,7 @@ export default function AnalyticsProjetosPage() {
       ) : (
         <div className="space-y-4">
           {/* KPIs acumulados */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Kpi
               titulo="Receita (realizada)"
               valor={formatNum(totais!.receita.realizado)}
@@ -201,6 +210,18 @@ export default function AnalyticsProjetosPage() {
               Icon={totais!.margem.realizado >= 0 ? TrendingUp : TrendingDown}
               cor={margemPct != null && margemPct >= 0 ? "text-brand-600" : "text-red-600"}
               fundo="bg-brand-50"
+            />
+            <Kpi
+              titulo="ROI Médio"
+              valor={formatPct(roi.medio, 1)}
+              sub={
+                roi.n > 0
+                  ? `Média de ${roi.n} projecto(s) com custo`
+                  : "Sem projectos com custo realizado"
+              }
+              Icon={Percent}
+              cor={roi.medio != null && roi.medio >= 0 ? "text-emerald-600" : "text-red-600"}
+              fundo={roi.medio != null && roi.medio >= 0 ? "bg-emerald-50" : "bg-red-50"}
             />
           </div>
 
