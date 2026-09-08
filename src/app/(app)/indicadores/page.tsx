@@ -44,8 +44,9 @@ export default function IndicadoresPage() {
   const [dados, setDados] = useState<IndicadorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filtroAno, setFiltroAno] = useState("");
-  const [filtroMes, setFiltroMes] = useState("");
+  // Por defeito mostra o ano e mês atuais (não todos).
+  const [filtroAno, setFiltroAno] = useState(() => String(new Date().getFullYear()));
+  const [filtroMes, setFiltroMes] = useState(() => String(new Date().getMonth() + 1));
   const gridRef = useRef<HTMLDivElement>(null);
   const anos = useMemo(anosDisponiveis, []);
 
@@ -67,7 +68,9 @@ export default function IndicadoresPage() {
   }, []);
 
   useEffect(() => {
-    carregar("", "");
+    // Carga inicial com o ano/mês atuais (valores iniciais dos filtros).
+    carregar(filtroAno, filtroMes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregar]);
 
   const recarregar = () => carregar(filtroAno, filtroMes);
