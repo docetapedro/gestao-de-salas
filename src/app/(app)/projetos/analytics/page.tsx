@@ -98,14 +98,11 @@ export default function AnalyticsProjetosPage() {
     return (totais.margem.realizado / totais.receita.realizado) * 100;
   }, [totais]);
 
-  // ROI Médio = média dos ROI por projecto (só os que têm custo realizado > 0).
-  const roi = useMemo(() => {
-    const valores = (dados?.projetos ?? [])
-      .map((p) => p.roiPct)
-      .filter((x): x is number => x !== null && !Number.isNaN(x));
-    if (valores.length === 0) return { medio: null as number | null, n: 0 };
-    return { medio: valores.reduce((a, b) => a + b, 0) / valores.length, n: valores.length };
-  }, [dados]);
+  // ROI global (agregado) = margem realizada total / custo realizado total × 100.
+  const roiGlobal = useMemo(() => {
+    if (!totais || totais.custo.realizado <= 0) return null;
+    return (totais.margem.realizado / totais.custo.realizado) * 100;
+  }, [totais]);
 
   return (
     <div>
@@ -213,15 +210,11 @@ export default function AnalyticsProjetosPage() {
             />
             <Kpi
               titulo="ROI Médio"
-              valor={formatPct(roi.medio, 1)}
-              sub={
-                roi.n > 0
-                  ? `Média de ${roi.n} projecto(s) com custo`
-                  : "Sem projectos com custo realizado"
-              }
+              valor={formatPct(roiGlobal, 1)}
+              sub="Sobre o custo realizado total"
               Icon={Percent}
-              cor={roi.medio != null && roi.medio >= 0 ? "text-emerald-600" : "text-red-600"}
-              fundo={roi.medio != null && roi.medio >= 0 ? "bg-emerald-50" : "bg-red-50"}
+              cor={roiGlobal != null && roiGlobal >= 0 ? "text-emerald-600" : "text-red-600"}
+              fundo={roiGlobal != null && roiGlobal >= 0 ? "bg-emerald-50" : "bg-red-50"}
             />
           </div>
 
