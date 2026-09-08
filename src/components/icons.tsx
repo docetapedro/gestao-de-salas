@@ -214,6 +214,18 @@ export function TrophyIcon(props: IconProps) {
   );
 }
 
+// Analytics / indicadores (barras de gráfico)
+export function ChartIcon(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <rect x="7" y="12" width="3" height="5" rx="0.5" />
+      <rect x="12" y="8" width="3" height="9" rx="0.5" />
+      <rect x="17" y="5" width="3" height="12" rx="0.5" />
+    </Base>
+  );
+}
+
 // Recolher (painel esquerdo)
 export function PanelLeftIcon(props: IconProps) {
   return (

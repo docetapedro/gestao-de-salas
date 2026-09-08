@@ -33,6 +33,7 @@ import {
 import {
   BriefcaseIcon,
   BuildingIcon,
+  ChartIcon,
   ClipboardListIcon,
   GraduationCapIcon,
   GridIcon,
@@ -93,6 +94,7 @@ const NAV: NavItem[] = [
     children: [
       { href: "/projetos", label: "Projectos", modulo: "projetos" },
       { href: "/projetos/despesas", label: "Despesas e Custos", modulo: "projetos" },
+      { href: "/projetos/analytics", label: "Analytics", modulo: "projetos" },
     ],
   },
   {
@@ -100,6 +102,13 @@ const NAV: NavItem[] = [
     label: "Gamificação",
     Icon: TrophyIcon,
     modulo: "gamificacao",
+  },
+  {
+    label: "Analytics",
+    Icon: ChartIcon,
+    children: [
+      { href: "/indicadores", label: "Indicadores Qualidade", modulo: "indicadores" },
+    ],
   },
   { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, modulo: "cadastros" },
   {

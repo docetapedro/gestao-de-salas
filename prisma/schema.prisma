@@ -693,3 +693,63 @@ model PfInscricao {
   @@index([turmaId])
   @@index([colaboradorId])
 }
+
+// ------------------------- Indicadores de Qualidade -------------------------
+// Módulo "Analytics › Indicadores Qualidade" (migrado da app kpi-academia).
+// Um indicador é "simples" (valor por período) OU "composto" (temFilhos=true,
+// valores por subitem/período). Entrada manual; a app agrega e visualiza.
+
+model Indicador {
+  id          String             @id @default(cuid())
+  titulo      String
+  tipoGrafico String             @default("bar") // bar | line | pie
+  temFilhos   Boolean            @default(false)
+  valor       Float              @default(0)
+  limite      Float              @default(0)
+  detalhes    String?
+  ordem       Int                @default(0)
+  createdAt   DateTime           @default(now())
+  periodos    IndicadorPeriodo[]
+  itens       IndicadorItem[]
+}
+
+// Valor mensal de um indicador simples (sem subitens).
+model IndicadorPeriodo {
+  id          String    @id @default(cuid())
+  indicadorId String
+  indicador   Indicador @relation(fields: [indicadorId], references: [id], onDelete: Cascade)
+  ano         Int
+  mes         Int
+  valor       Float     @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([indicadorId, ano, mes])
+  @@index([indicadorId])
+}
+
+// Subitem/filho de um indicador composto (ex.: "SkyOne", "TransBrás").
+model IndicadorItem {
+  id          String                 @id @default(cuid())
+  indicadorId String
+  indicador   Indicador              @relation(fields: [indicadorId], references: [id], onDelete: Cascade)
+  nome        String
+  valor       Float                  @default(0)
+  limite      Float?
+  periodos    IndicadorItemPeriodo[]
+
+  @@index([indicadorId])
+}
+
+// Valor mensal de cada subitem.
+model IndicadorItemPeriodo {
+  id     String        @id @default(cuid())
+  itemId String
+  item   IndicadorItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ano    Int
+  mes    Int
+  valor  Float?
+  limite Float?
+
+  @@index([itemId])
+}
