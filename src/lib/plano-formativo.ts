@@ -18,8 +18,8 @@ export const ESTADOS_TURMA: {
 }[] = [
   { value: "PLANEADO", label: "Planeado", badge: "bg-slate-100 text-slate-700" },
   { value: "EM_ORGANIZACAO", label: "Em organização", badge: "bg-amber-100 text-amber-800" },
-  { value: "AGENDADO", label: "Agendado", badge: "bg-blue-100 text-blue-800" },
-  { value: "EM_CURSO", label: "Em curso", badge: "bg-indigo-100 text-indigo-800" },
+  { value: "AGENDADO", label: "Agendado", badge: "bg-yellow-100 text-yellow-800" },
+  { value: "EM_CURSO", label: "Em curso", badge: "bg-blue-100 text-blue-800" },
   { value: "CONCLUIDO", label: "Concluído", badge: "bg-green-100 text-green-800" },
   { value: "CANCELADO", label: "Cancelado", badge: "bg-rose-100 text-rose-700" },
 ];
