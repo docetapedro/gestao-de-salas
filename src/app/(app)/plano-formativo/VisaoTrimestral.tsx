@@ -26,6 +26,9 @@ import {
   MESES_CURTO,
   trimestreDoMes,
   naturezaFormacao,
+  primeiraSegunda,
+  semanaDoMes,
+  rotulosSemanas,
   type EstadoTurma,
 } from "@/lib/plano-formativo";
 
@@ -53,12 +56,6 @@ export type PFFormacao = {
 
 type TurmaFmt = PFTurma & { formacaoNome: string; competencia: string | null };
 
-const BUCKETS: [string, number, number][] = [
-  ["1–7", 1, 7],
-  ["8–14", 8, 14],
-  ["15–21", 15, 21],
-  ["22+", 22, 31],
-];
 const N_COLS = 12; // 3 meses × 4 semanas
 
 function Kpi({ label, value, sub }: { label: string; value: number; sub?: string }) {
@@ -84,12 +81,14 @@ export function VisaoTrimestral({
   const [tri, setTri] = useState(() => trimestreDoMes(new Date().getMonth()));
   const [detalhe, setDetalhe] = useState<TurmaFmt | null>(null);
   const meses = TRIMESTRES[tri - 1].meses;
+  const anoGrelha = ano ?? new Date().getFullYear();
 
   const colDe = (mes: number, dia: number) => {
     const mp = meses.indexOf(mes);
     if (mp < 0) return -1;
-    const b = dia <= 7 ? 0 : dia <= 14 ? 1 : dia <= 21 ? 2 : 3;
-    return mp * 4 + b;
+    // Semanas a começar à 1ª segunda do mês (a 1ª semana absorve os dias iniciais).
+    const fm = primeiraSegunda(anoGrelha, mes);
+    return mp * 4 + semanaDoMes(dia, fm);
   };
 
   // Turmas do ano: entram na grelha as cujo intervalo início→fim atravessa o
@@ -225,7 +224,7 @@ export function VisaoTrimestral({
                 </tr>
                 <tr>
                   {meses.map((m) =>
-                    BUCKETS.map(([lbl], bi) => (
+                    rotulosSemanas(primeiraSegunda(anoGrelha, m)).map((lbl, bi) => (
                       <th
                         key={`${m}-${bi}`}
                         className={`border-b border-slate-200 p-1 text-center font-normal text-slate-400 ${
