@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/Modal";
+import { MoneyInput } from "@/components/MoneyInput";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -72,6 +73,18 @@ function anosDisponiveis(): number[] {
   const out: number[] = [];
   for (let a = 2026; a <= fim; a++) out.push(a);
   return out;
+}
+
+/** Célula numérica do quadro: reutiliza o MoneyInput (milhares "." / decimal ",")
+ *  sem prefixo, compacto. `title` dá a dica (ex.: "Previsto" / "Realizado"). */
+function NumCell({
+  value, onChange, title,
+}: { value: string; onChange: (v: string) => void; title?: string }) {
+  return (
+    <span title={title} className="block min-w-0 flex-1">
+      <MoneyInput value={value} onChange={onChange} prefix={null} className="h-8 text-sm" />
+    </span>
+  );
 }
 
 export default function PerformancePage() {
@@ -211,28 +224,15 @@ export default function PerformancePage() {
   const [indOpen, setIndOpen] = useState(false);
 
   /* ---------------------------------- UI ---------------------------------- */
-  const inputCell =
-    "h-8 w-full min-w-0 rounded border border-input bg-background px-2 text-right text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
   function ResultadoCell({ ind }: { ind: Indicador }) {
     const r = draft[ind.id];
     if (!r) return null;
     if (ind.tipo === "PREVISTO_REALIZADO") {
       return (
         <div className="flex items-center gap-1">
-          <input
-            type="number" step="0.01" placeholder="Prev."
-            className={inputCell}
-            value={r.resultado}
-            onChange={(e) => setCampo(ind.id, "resultado", e.target.value)}
-          />
+          <NumCell value={r.resultado} onChange={(v) => setCampo(ind.id, "resultado", v)} title="Previsto" />
           <span className="text-slate-400">/</span>
-          <input
-            type="number" step="0.01" placeholder="Real."
-            className={inputCell}
-            value={r.resultado2}
-            onChange={(e) => setCampo(ind.id, "resultado2", e.target.value)}
-          />
+          <NumCell value={r.resultado2} onChange={(v) => setCampo(ind.id, "resultado2", v)} title="Realizado" />
         </div>
       );
     }
@@ -241,12 +241,7 @@ export default function PerformancePage() {
       (ind.tipo === "PERCENTAGEM" ? "%" : ind.tipo === "HORAS" ? "h" : ind.tipo === "MOEDA" ? "Kz" : "");
     return (
       <div className="flex items-center gap-1">
-        <input
-          type="number" step="0.01"
-          className={inputCell}
-          value={r.resultado}
-          onChange={(e) => setCampo(ind.id, "resultado", e.target.value)}
-        />
+        <NumCell value={r.resultado} onChange={(v) => setCampo(ind.id, "resultado", v)} />
         {suf && <span className="shrink-0 text-xs text-slate-400">{suf}</span>}
       </div>
     );
@@ -336,19 +331,9 @@ export default function PerformancePage() {
                           <td className="px-3 py-1.5">
                             {ind.usaHoras && r ? (
                               <div className="flex items-center gap-1">
-                                <input
-                                  type="number" step="0.01" placeholder="—"
-                                  className={inputCell}
-                                  value={r.horas}
-                                  onChange={(e) => setCampo(ind.id, "horas", e.target.value)}
-                                />
+                                <NumCell value={r.horas} onChange={(v) => setCampo(ind.id, "horas", v)} title="Horas realizadas" />
                                 <span className="text-slate-400">/</span>
-                                <input
-                                  type="number" step="0.01" placeholder="—"
-                                  className={inputCell}
-                                  value={r.horasTotal}
-                                  onChange={(e) => setCampo(ind.id, "horasTotal", e.target.value)}
-                                />
+                                <NumCell value={r.horasTotal} onChange={(v) => setCampo(ind.id, "horasTotal", v)} title="Horas disponíveis" />
                               </div>
                             ) : (
                               <span className="text-slate-300">—</span>
@@ -358,11 +343,9 @@ export default function PerformancePage() {
                         {segmentos.map((seg) => (
                           <td key={seg.id} className="px-3 py-1.5">
                             {ind.usaSegmentos && r ? (
-                              <input
-                                type="number" step="0.01"
-                                className={inputCell}
+                              <NumCell
                                 value={r.segmentos[seg.id] ?? ""}
-                                onChange={(e) => setSeg(ind.id, seg.id, e.target.value)}
+                                onChange={(v) => setSeg(ind.id, seg.id, v)}
                               />
                             ) : (
                               <span className="text-slate-300">—</span>
