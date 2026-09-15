@@ -14,6 +14,7 @@ export type ModuloKey =
   | "stock"
   | "gamificacao"
   | "indicadores"
+  | "performance"
   | "cadastros"
   | "usuarios";
 
@@ -27,6 +28,7 @@ export const MODULOS: { key: ModuloKey; label: string }[] = [
   { key: "stock", label: "Stock" },
   { key: "gamificacao", label: "Gamificação" },
   { key: "indicadores", label: "Indicadores Qualidade" },
+  { key: "performance", label: "Indicadores Performance" },
   { key: "cadastros", label: "Cadastros" },
   { key: "usuarios", label: "Utilizadores" },
 ];

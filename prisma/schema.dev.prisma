@@ -750,3 +750,74 @@ model IndicadorItemPeriodo {
 
   @@index([itemId])
 }
+
+// ------------------------ Indicadores de Performance ------------------------
+// Módulo "Analytics › Indicadores de Performance" (quadro mensal pedagógico —
+// ver performance.jpg). Independente dos Indicadores de Qualidade e dos
+// Cadastros. TUDO entrada manual: nada é calculado a partir de outros módulos.
+// Um quadro por ano/mês; cada indicador tem um Resultado (e, opcionalmente, uma
+// coluna "Horas" e uma desagregação por segmentos/clientes configuráveis).
+
+// Segmento/coluna configurável do quadro (ex.: "Sky One", "TransBras",
+// "Externo", "Interno"). Lista PRÓPRIA — não reutiliza os clientes dos Cadastros.
+model PerfSegmento {
+  id        String              @id @default(cuid())
+  nome      String              @unique
+  ordem     Int                 @default(0)
+  ativo     Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  valores   PerfValorSegmento[]
+}
+
+// Definição (catálogo) de um indicador de performance. `tipo` controla o
+// widget de input e a formatação do Resultado.
+model PerfIndicador {
+  id           String      @id @default(cuid())
+  ordem        Int         @default(0)
+  titulo       String
+  // PERCENTAGEM | NUMERO | HORAS | MOEDA | PREVISTO_REALIZADO
+  tipo         String      @default("NUMERO")
+  usaHoras     Boolean     @default(false) // mostra a coluna "Horas" (fração num/den)
+  usaSegmentos Boolean     @default(true)  // aceita desagregação por segmentos
+  unidade      String? // rótulo livre opcional (ex.: "Kz", "%")
+  ativo        Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  valores      PerfValor[]
+}
+
+// Valor de um indicador num período (ano/mês). Um registo por indicador/período.
+model PerfValor {
+  id          String              @id @default(cuid())
+  indicadorId String
+  indicador   PerfIndicador       @relation(fields: [indicadorId], references: [id], onDelete: Cascade)
+  ano         Int
+  mes         Int
+  // Resultado principal. Em PREVISTO_REALIZADO: resultado = previsto, resultado2 = realizado.
+  resultado   Float?
+  resultado2  Float?
+  // Coluna "Horas" opcional, guardada como fração horas/horasTotal (ex.: 161/356).
+  horas       Float?
+  horasTotal  Float?
+  texto       String? // observação / valor livre de recurso
+  segmentos   PerfValorSegmento[]
+
+  @@unique([indicadorId, ano, mes])
+  @@index([indicadorId])
+  @@index([ano, mes])
+}
+
+// Valor de um segmento para um dado PerfValor (a desagregação por coluna).
+model PerfValorSegmento {
+  id         String       @id @default(cuid())
+  valorId    String
+  valor      PerfValor    @relation(fields: [valorId], references: [id], onDelete: Cascade)
+  segmentoId String
+  segmento   PerfSegmento @relation(fields: [segmentoId], references: [id], onDelete: Cascade)
+  quantidade Float?
+
+  @@unique([valorId, segmentoId])
+  @@index([valorId])
+  @@index([segmentoId])
+}
