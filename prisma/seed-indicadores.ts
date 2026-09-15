@@ -26,8 +26,7 @@ const INDICADORES: [number, string, string, boolean, number, number, string | nu
   [19, "Total de Horas por Aluguer/reserva", "bar", false, 51, 51, null, 8],
   [20, "Total de Horas por Aluguer/reserva não faturáveis", "bar", true, 0, 0, null, 9],
   [22, "Total de Horas por Aluguer/reserva faturáveis", "bar", true, 0, 0, null, 10],
-  [24, "Nº Total de Horas Formação Plano Interno ", "bar", false, 16, 1000, null, 0],
-  [25, "Nº Total de Horas Formação Plano Interno ", "bar", false, 16, 1000, null, 0],
+  [24, "Nº Total de Horas Formação Plano Interno", "bar", false, 16, 1000, null, 0],
   [26, "Nº Total Horas Formação Academia Externos", "bar", false, 58, 1000, null, 0],
   [27, "Taxa de conversão de Oportunidades em Vendas", "pie", false, 20, 100, null, 0],
 ];
@@ -65,7 +64,7 @@ const PERIODOS: [number, number, number, number][] = [
   [8, 2026, 4, 40], [20, 2026, 4, 0], [22, 2026, 4, 0], [16, 2026, 4, 0],
   [11, 2026, 4, 0], [15, 2026, 4, 1], [14, 2026, 4, 8], [19, 2026, 4, 164],
   [5, 2026, 7, 0], [8, 2026, 7, 88.33], [18, 2026, 7, 12], [24, 2026, 7, 16],
-  [25, 2026, 7, 16], [26, 2026, 7, 58], [27, 2026, 7, 20],
+  [26, 2026, 7, 58], [27, 2026, 7, 20],
 ];
 
 // indicador_item_periodos: item_id antigo, ano, mes, valor, limite
@@ -103,7 +102,7 @@ async function main() {
   for (const [id, titulo, tipo, temFilhos, valor, limite, detalhes, ordem] of INDICADORES) {
     const ind = await prisma.indicador.create({
       data: {
-        titulo,
+        titulo: titulo.trim().replace(/\s+/g, " "),
         tipoGrafico: tipo,
         temFilhos,
         valor,

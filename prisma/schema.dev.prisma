@@ -698,7 +698,9 @@ model PfInscricao {
 
 model Indicador {
   id          String             @id @default(cuid())
-  titulo      String
+  // Título único: não podem existir dois indicadores de qualidade com o mesmo
+  // nome (a dedup em backfill-dedup-indicadores.ts corre antes do db push).
+  titulo      String             @unique
   tipoGrafico String             @default("bar") // bar | line | pie
   temFilhos   Boolean            @default(false)
   valor       Float              @default(0)

@@ -93,8 +93,14 @@ export async function POST(req: NextRequest) {
     assertCan(await getSession(), "indicadores", "manage");
     const body = await req.json();
 
-    const titulo = String(body.titulo || "").trim();
+    const titulo = String(body.titulo || "").trim().replace(/\s+/g, " ");
     if (!titulo) return json({ error: "O título é obrigatório" }, 400);
+    // Não permite indicadores com nomes duplicados (reforça o índice único).
+    const jaExiste = await prisma.indicador.findFirst({
+      where: { titulo },
+      select: { id: true },
+    });
+    if (jaExiste) return json({ error: "Já existe um indicador com esse nome" }, 400);
     const ano = parseInt(String(body.ano), 10);
     const mes = parseInt(String(body.mes), 10);
     if (!ano || !mes) return json({ error: "Ano e mês são obrigatórios" }, 400);
