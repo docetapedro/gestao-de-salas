@@ -823,3 +823,26 @@ model PerfValorSegmento {
   @@index([valorId])
   @@index([segmentoId])
 }
+
+// --------------------------- Mapa de Formações ------------------------------
+// Módulo "Analytics › Mapa de Formações" (ver Mapa_de_formacoes.jpg). Registo
+// manual e independente (não liga a Projectos nem ao Plano Formativo): uma
+// linha por formação realizada, com cliente (externo ou "Interno"), acção,
+// datas, tipo, contagens de formandos e carga horária.
+model MapaFormacao {
+  id             String    @id @default(cuid())
+  cliente        String // ex.: "Giant", "AGT 4.0", "Interno"
+  accao          String // nome da acção/formação
+  tipoActividade String    @default("Formação")
+  dataInicio     DateTime?
+  dataFim        DateTime?
+  previstos      Int? // nº de formandos previstos
+  presentes      Int? // nº de formandos presentes
+  concluiram     Int? // nº de formandos que concluíram
+  cargaHoraria   Float? // carga horária (horas)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([dataInicio])
+  @@index([cliente])
+}

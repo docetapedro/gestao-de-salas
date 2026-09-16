@@ -109,6 +109,7 @@ const NAV: NavItem[] = [
     children: [
       { href: "/indicadores", label: "Indicadores Qualidade", modulo: "indicadores" },
       { href: "/performance", label: "Indicadores de Performance", modulo: "performance" },
+      { href: "/mapa-formacoes", label: "Mapa de Formações", modulo: "mapa-formacoes" },
     ],
   },
   { href: "/cadastros", label: "Cadastros", Icon: SlidersIcon, modulo: "cadastros" },

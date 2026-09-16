@@ -15,6 +15,7 @@ export type ModuloKey =
   | "gamificacao"
   | "indicadores"
   | "performance"
+  | "mapa-formacoes"
   | "cadastros"
   | "usuarios";
 
@@ -29,6 +30,7 @@ export const MODULOS: { key: ModuloKey; label: string }[] = [
   { key: "gamificacao", label: "Gamificação" },
   { key: "indicadores", label: "Indicadores Qualidade" },
   { key: "performance", label: "Indicadores Performance" },
+  { key: "mapa-formacoes", label: "Mapa de Formações" },
   { key: "cadastros", label: "Cadastros" },
   { key: "usuarios", label: "Utilizadores" },
 ];
