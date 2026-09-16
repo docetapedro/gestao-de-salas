@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/Modal";
+import DatePicker from "@/components/DatePicker";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -357,11 +358,19 @@ export default function MapaFormacoesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1 block text-xs">Data início</Label>
-                <Input type="date" value={form.dataInicio} onChange={(e) => setForm({ ...form, dataInicio: e.target.value })} />
+                <DatePicker
+                  className={selectCls}
+                  value={form.dataInicio}
+                  onChange={(v) => setForm({ ...form, dataInicio: v })}
+                />
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Data fim</Label>
-                <Input type="date" value={form.dataFim} onChange={(e) => setForm({ ...form, dataFim: e.target.value })} />
+                <DatePicker
+                  className={selectCls}
+                  value={form.dataFim}
+                  onChange={(v) => setForm({ ...form, dataFim: v })}
+                />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
