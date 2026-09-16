@@ -336,7 +336,7 @@ export default function MapaFormacoesPage() {
 
       {/* --------------------------- Modal criar/editar --------------------------- */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar formação" : "Nova formação"}</DialogTitle>
           </DialogHeader>
