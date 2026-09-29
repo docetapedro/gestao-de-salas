@@ -133,23 +133,41 @@ export function VisaoTrimestral({
     return { rows: [...map.entries()], semData: sem, totais: tot };
   }, [formacoes, meses, ano]);
 
-  // Para uma formação, calcula as células cobertas por cada turma (banda).
-  function celulas(turmas: TurmaFmt[]) {
-    const cells: ({ t: TurmaFmt; inicio: boolean } | null)[] = Array(N_COLS).fill(null);
-    for (const t of turmas) {
-      const di = new Date(t.dataInicio!);
-      let ini = colDe(di.getMonth(), di.getDate());
-      if (ini < 0) ini = 0; // começou antes do trimestre
-      let fim = ini;
-      if (t.dataFim) {
-        const df = new Date(t.dataFim);
-        const ec = colDe(df.getMonth(), df.getDate());
-        fim = ec < 0 ? N_COLS - 1 : Math.max(ini, ec);
+  // Para uma formação, empacota as turmas em faixas (lanes). Cada faixa é uma
+  // sub-linha de N_COLS células; turmas que se sobrepõem no tempo caem em faixas
+  // diferentes, de modo que várias turmas na mesma semana fiquem todas visíveis.
+  type Cell = { t: TurmaFmt; inicio: boolean } | null;
+  function lanesDe(turmas: TurmaFmt[]): Cell[][] {
+    // Calcula o intervalo de colunas [ini, fim] de cada turma no trimestre.
+    const spans = turmas
+      .map((t) => {
+        const di = new Date(t.dataInicio!);
+        let ini = colDe(di.getMonth(), di.getDate());
+        if (ini < 0) ini = 0; // começou antes do trimestre
+        let fim = ini;
+        if (t.dataFim) {
+          const df = new Date(t.dataFim);
+          const ec = colDe(df.getMonth(), df.getDate());
+          fim = ec < 0 ? N_COLS - 1 : Math.max(ini, ec);
+        }
+        return { t, ini: Math.max(0, ini), fim: Math.min(N_COLS - 1, fim) };
+      })
+      .sort((a, b) => a.ini - b.ini || a.fim - b.fim);
+
+    const lanes: Cell[][] = [];
+    for (const s of spans) {
+      // Primeira faixa onde todo o intervalo [ini, fim] está livre.
+      let lane = lanes.find((cells) => {
+        for (let c = s.ini; c <= s.fim; c++) if (cells[c]) return false;
+        return true;
+      });
+      if (!lane) {
+        lane = Array(N_COLS).fill(null);
+        lanes.push(lane);
       }
-      for (let c = Math.max(0, ini); c <= Math.min(N_COLS - 1, fim); c++)
-        if (!cells[c]) cells[c] = { t, inicio: c === ini };
+      for (let c = s.ini; c <= s.fim; c++) lane[c] = { t: s.t, inicio: c === s.ini };
     }
-    return cells;
+    return lanes.length ? lanes : [Array(N_COLS).fill(null)];
   }
 
   return (
@@ -239,18 +257,28 @@ export function VisaoTrimestral({
               </thead>
               <tbody>
                 {rows.map(([nome, turmas]) => {
-                  const cells = celulas(turmas);
+                  const lanes = lanesDe(turmas);
                   const formadores = [
                     ...new Set(turmas.map((t) => t.formador?.trim()).filter(Boolean)),
                   ].join(", ");
-                  return (
-                    <tr key={nome} className="hover:bg-slate-50/50">
-                      <td className="sticky left-0 z-10 min-w-[220px] border-b border-r border-slate-200 bg-white p-2 text-slate-800">
-                        <div>{nome}</div>
-                        {formadores && (
-                          <div className="text-[11px] font-normal text-slate-500">{formadores}</div>
-                        )}
-                      </td>
+                  return lanes.map((cells, li) => (
+                    <tr key={`${nome}-${li}`} className="hover:bg-slate-50/50">
+                      {li === 0 && (
+                        <td
+                          rowSpan={lanes.length}
+                          className="sticky left-0 z-10 min-w-[220px] border-b border-r border-slate-200 bg-white p-2 align-top text-slate-800"
+                        >
+                          <div>{nome}</div>
+                          {formadores && (
+                            <div className="text-[11px] font-normal text-slate-500">{formadores}</div>
+                          )}
+                          {lanes.length > 1 && (
+                            <div className="text-[10px] font-normal text-slate-400">
+                              {turmas.length} turmas
+                            </div>
+                          )}
+                        </td>
+                      )}
                       {cells.map((c, i) => (
                         <td
                           key={i}
@@ -275,7 +303,7 @@ export function VisaoTrimestral({
                         </td>
                       ))}
                     </tr>
-                  );
+                  ));
                 })}
               </tbody>
             </table>
