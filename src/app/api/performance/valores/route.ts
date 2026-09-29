@@ -30,50 +30,59 @@ export async function POST(req: NextRequest) {
 
     const linhas: any[] = Array.isArray(body.valores) ? body.valores : [];
 
-    await prisma.$transaction(async (tx) => {
-      // Segmentos válidos (para não gravar colunas que não existem).
-      const segIds = new Set(
-        (await tx.perfSegmento.findMany({ select: { id: true } })).map((s) => s.id)
-      );
+    await prisma.$transaction(
+      async (tx) => {
+        // IDs válidos carregados de uma só vez (evita 1 findUnique por linha e
+        // permite ignorar colunas/indicadores que não existem).
+        const [segRows0, indRows0] = await Promise.all([
+          tx.perfSegmento.findMany({ select: { id: true } }),
+          tx.perfIndicador.findMany({ select: { id: true } }),
+        ]);
+        const segIds = new Set(segRows0.map((s) => s.id));
+        const indIds = new Set(indRows0.map((i) => i.id));
 
-      for (const l of linhas) {
-        const indicadorId = String(l.indicadorId || "").trim();
-        if (!indicadorId) continue;
-        // Só aceita indicadores existentes.
-        const ind = await tx.perfIndicador.findUnique({
-          where: { id: indicadorId },
-          select: { id: true },
-        });
-        if (!ind) continue;
+        const valorIds: string[] = [];
+        const segRows: { valorId: string; segmentoId: string; quantidade: number }[] = [];
 
-        const dados = {
-          resultado: numOrNull(l.resultado),
-          resultado2: numOrNull(l.resultado2),
-          horas: numOrNull(l.horas),
-          horasTotal: numOrNull(l.horasTotal),
-          texto: l.texto ? String(l.texto).trim() || null : null,
-        };
+        for (const l of linhas) {
+          const indicadorId = String(l.indicadorId || "").trim();
+          if (!indicadorId || !indIds.has(indicadorId)) continue;
 
-        const valor = await tx.perfValor.upsert({
-          where: { indicadorId_ano_mes: { indicadorId, ano, mes } },
-          update: dados,
-          create: { indicadorId, ano, mes, ...dados },
-        });
+          const dados = {
+            resultado: numOrNull(l.resultado),
+            resultado2: numOrNull(l.resultado2),
+            horas: numOrNull(l.horas),
+            horasTotal: numOrNull(l.horasTotal),
+            texto: l.texto ? String(l.texto).trim() || null : null,
+          };
 
-        // Substitui a desagregação por segmento deste registo.
-        await tx.perfValorSegmento.deleteMany({ where: { valorId: valor.id } });
-        const segs =
-          l.segmentos && typeof l.segmentos === "object" ? l.segmentos : {};
-        for (const [segmentoId, raw] of Object.entries(segs)) {
-          if (!segIds.has(segmentoId)) continue;
-          const quantidade = numOrNull(raw);
-          if (quantidade === null) continue; // não guarda células vazias
-          await tx.perfValorSegmento.create({
-            data: { valorId: valor.id, segmentoId, quantidade },
+          const valor = await tx.perfValor.upsert({
+            where: { indicadorId_ano_mes: { indicadorId, ano, mes } },
+            update: dados,
+            create: { indicadorId, ano, mes, ...dados },
+            select: { id: true },
           });
+          valorIds.push(valor.id);
+
+          const segs =
+            l.segmentos && typeof l.segmentos === "object" ? l.segmentos : {};
+          for (const [segmentoId, raw] of Object.entries(segs)) {
+            if (!segIds.has(segmentoId)) continue;
+            const quantidade = numOrNull(raw);
+            if (quantidade === null) continue; // não guarda células vazias
+            segRows.push({ valorId: valor.id, segmentoId, quantidade });
+          }
         }
-      }
-    });
+
+        // Substitui a desagregação por segmento de todos os registos de uma vez
+        // (1 deleteMany + 1 createMany em vez de N por linha).
+        if (valorIds.length)
+          await tx.perfValorSegmento.deleteMany({ where: { valorId: { in: valorIds } } });
+        if (segRows.length)
+          await tx.perfValorSegmento.createMany({ data: segRows });
+      },
+      { timeout: 20000, maxWait: 10000 }
+    );
 
     return json({ ok: true }, 201);
   } catch (err) {
