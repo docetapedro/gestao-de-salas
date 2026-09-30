@@ -613,6 +613,40 @@ function DayView({
     return d;
   }, [date]);
 
+  // Seleção por arrasto na linha do tempo (minutos desde START_HOUR): abre a
+  // modal com as horas de início/fim (arredondadas à hora).
+  const [tdrag, setTdrag] = useState<{
+    roomId: string;
+    aMin: number;
+    bMin: number;
+  } | null>(null);
+  const tdragRef = useRef(tdrag);
+  tdragRef.current = tdrag;
+  const dayStartRef = useRef(dayStart);
+  dayStartRef.current = dayStart;
+  const onCreateRef = useRef(onCreate);
+  onCreateRef.current = onCreate;
+  useEffect(() => {
+    function up() {
+      const d = tdragRef.current;
+      if (!d) return;
+      setTdrag(null);
+      const lo = Math.min(d.aMin, d.bMin);
+      const hi = Math.max(d.aMin, d.bMin);
+      const startMin = Math.floor(lo / 60) * 60;
+      let endMin = Math.ceil(hi / 60) * 60;
+      if (endMin <= startMin) endMin = startMin + 60;
+      const base = dayStartRef.current.getTime();
+      onCreateRef.current({
+        roomId: d.roomId,
+        start: new Date(base + startMin * 60000),
+        end: new Date(base + endMin * 60000),
+      });
+    }
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+
   useEffect(() => {
     function tick() {
       const now = new Date();
@@ -692,24 +726,35 @@ function DayView({
                     </span>
                   </div>
                   <div
-                    onClick={(e) => {
+                    onMouseDown={(e) => {
                       if (!canManage) return;
+                      e.preventDefault();
                       const rect = e.currentTarget.getBoundingClientRect();
-                      const frac = Math.max(
-                        0,
-                        Math.min(0.999, (e.clientX - rect.left) / rect.width)
-                      );
-                      const startMin = Math.floor((frac * TOTAL_MIN) / 60) * 60;
-                      const start = new Date(dayStart.getTime() + startMin * 60000);
-                      onCreate({
-                        roomId: room.id,
-                        start,
-                        end: new Date(start.getTime() + 60 * 60000),
-                      });
+                      const m =
+                        Math.max(
+                          0,
+                          Math.min(0.999, (e.clientX - rect.left) / rect.width)
+                        ) * TOTAL_MIN;
+                      setTdrag({ roomId: room.id, aMin: m, bMin: m });
                     }}
-                    title={canManage ? "Clique para marcar evento" : undefined}
+                    onMouseMove={(e) => {
+                      const dr = tdragRef.current;
+                      if (!dr || dr.roomId !== room.id) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const m =
+                        Math.max(
+                          0,
+                          Math.min(0.999, (e.clientX - rect.left) / rect.width)
+                        ) * TOTAL_MIN;
+                      setTdrag({ ...dr, bMin: m });
+                    }}
+                    title={
+                      canManage
+                        ? "Clique ou arraste para marcar evento"
+                        : undefined
+                    }
                     className={`relative flex-1 bg-green-100 ${
-                      canManage ? "cursor-pointer" : ""
+                      canManage ? "cursor-pointer select-none" : ""
                     } ${kiosk ? "" : "h-24"}`}
                   >
                     <div className="absolute inset-0 flex pointer-events-none">
@@ -717,6 +762,24 @@ function DayView({
                         <div key={h} className="flex-1 border-l border-white/70" />
                       ))}
                     </div>
+                    {tdrag &&
+                      tdrag.roomId === room.id &&
+                      (() => {
+                        const lo = Math.min(tdrag.aMin, tdrag.bMin);
+                        const hi = Math.max(tdrag.aMin, tdrag.bMin);
+                        const s = Math.floor(lo / 60) * 60;
+                        let e2 = Math.ceil(hi / 60) * 60;
+                        if (e2 <= s) e2 = s + 60;
+                        return (
+                          <div
+                            className="absolute top-1 bottom-1 rounded-md bg-brand-400/40 ring-2 ring-brand-500 z-[5] pointer-events-none"
+                            style={{
+                              left: `${(s / TOTAL_MIN) * 100}%`,
+                              width: `${((e2 - s) / TOTAL_MIN) * 100}%`,
+                            }}
+                          />
+                        );
+                      })()}
                     {nowMin !== null && (
                       <div
                         className="absolute top-0 bottom-0 w-0.5 bg-blue-700 z-20"
@@ -734,6 +797,7 @@ function DayView({
                       return (
                         <button
                           key={ev.id}
+                          onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelect(ev);
@@ -792,6 +856,44 @@ function WeekView({
   canManage: boolean;
 }) {
   const days = Array.from({ length: DAYS_SHOWN }, (_, i) => addDays(weekStart, i));
+
+  // Seleção por arrasto: escolher vários dias (na linha de uma sala) e abrir a
+  // modal com início = 1.º dia e fim = último dia selecionado.
+  const [drag, setDrag] = useState<{ roomId: string; a: number; b: number } | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+  const daysRef = useRef(days);
+  daysRef.current = days;
+  const onCreateRef = useRef(onCreate);
+  onCreateRef.current = onCreate;
+  useEffect(() => {
+    function up() {
+      const d = dragRef.current;
+      if (!d) return;
+      setDrag(null);
+      const lo = Math.min(d.a, d.b);
+      const hi = Math.max(d.a, d.b);
+      const dd = daysRef.current;
+      const startD = dd[lo];
+      const endD = dd[hi];
+      if (!startD || !endD) return;
+      onCreateRef.current(
+        lo === hi
+          ? {
+              roomId: d.roomId,
+              start: atTime(startD, START_HOUR, 0),
+              end: atTime(startD, START_HOUR + 1, 0),
+            }
+          : {
+              roomId: d.roomId,
+              start: atTime(startD, START_HOUR, 0),
+              end: atTime(endD, END_HOUR, 0),
+            }
+      );
+    }
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
 
   const byCell = useMemo(() => {
     const map = new Map<string, EventItem[]>();
@@ -871,21 +973,37 @@ function WeekView({
                   {days.map((d, i) => {
                     const evs = byCell.get(`${room.id}|${ymd(d)}`) || [];
                     const isToday = ymd(d) === todayStr;
+                    const sel =
+                      drag && drag.roomId === room.id
+                        ? {
+                            lo: Math.min(drag.a, drag.b),
+                            hi: Math.max(drag.a, drag.b),
+                          }
+                        : null;
+                    const selected = !!sel && i >= sel.lo && i <= sel.hi;
                     return (
                       <div
                         key={i}
-                        onClick={() =>
-                          canManage &&
-                          onCreate({
-                            roomId: room.id,
-                            start: atTime(d, 8, 0),
-                            end: atTime(d, 9, 0),
-                          })
+                        onMouseDown={(e) => {
+                          if (!canManage) return;
+                          e.preventDefault();
+                          setDrag({ roomId: room.id, a: i, b: i });
+                        }}
+                        onMouseEnter={() => {
+                          const dr = dragRef.current;
+                          if (dr && dr.roomId === room.id)
+                            setDrag({ roomId: room.id, a: dr.a, b: i });
+                        }}
+                        title={
+                          canManage
+                            ? "Clique ou arraste para marcar evento"
+                            : undefined
                         }
-                        title={canManage ? "Clique para marcar evento" : undefined}
                         className={`flex-1 min-w-0 border-l border-slate-100 p-1.5 space-y-1 ${
                           canManage ? "cursor-pointer hover:bg-slate-50/60" : ""
-                        } ${isToday ? "bg-brand-50/40" : ""}`}
+                        } ${isToday ? "bg-brand-50/40" : ""} ${
+                          selected ? "bg-brand-100 ring-2 ring-inset ring-brand-400" : ""
+                        }`}
                       >
                         {evs.length === 0 ? (
                           <div className="h-full min-h-[44px] rounded bg-green-100" />
@@ -893,6 +1011,7 @@ function WeekView({
                           evs.map((ev) => (
                             <button
                               key={ev.id}
+                              onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onSelect(ev);
@@ -959,6 +1078,36 @@ function MonthView({
   }
   const month = refDate.getMonth();
 
+  // Seleção por arrasto: escolher vários dias e abrir a modal com início = 1.º
+  // dia e fim = último dia selecionado.
+  const [drag, setDrag] = useState<{ a: number; b: number } | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+  const cellsRef = useRef(cells);
+  cellsRef.current = cells;
+  const onCreateRef = useRef(onCreate);
+  onCreateRef.current = onCreate;
+  useEffect(() => {
+    function up() {
+      const d = dragRef.current;
+      if (!d) return;
+      setDrag(null);
+      const lo = Math.min(d.a, d.b);
+      const hi = Math.max(d.a, d.b);
+      const cc = cellsRef.current;
+      const startD = cc[lo];
+      const endD = cc[hi];
+      if (!startD || !endD) return;
+      onCreateRef.current(
+        lo === hi
+          ? { start: atTime(startD, START_HOUR, 0), end: atTime(startD, START_HOUR + 1, 0) }
+          : { start: atTime(startD, START_HOUR, 0), end: atTime(endD, END_HOUR, 0) }
+      );
+    }
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+
   const byDay = useMemo(() => {
     const map = new Map<string, EventItem[]>();
     for (const ev of events) {
@@ -994,21 +1143,37 @@ function MonthView({
           const dStr = ymd(d);
           const isToday = dStr === todayStr;
           const evs = byDay.get(dStr) || [];
+          const sel = drag
+            ? { lo: Math.min(drag.a, drag.b), hi: Math.max(drag.a, drag.b) }
+            : null;
+          const selected = !!sel && i >= sel.lo && i <= sel.hi;
           return (
             <div
               key={i}
-              onClick={() =>
-                canManage &&
-                onCreate({ start: atTime(d, 8, 0), end: atTime(d, 9, 0) })
+              onMouseDown={(e) => {
+                if (!canManage) return;
+                e.preventDefault();
+                setDrag({ a: i, b: i });
+              }}
+              onMouseEnter={() => {
+                const dr = dragRef.current;
+                if (dr) setDrag({ a: dr.a, b: i });
+              }}
+              title={
+                canManage ? "Clique ou arraste para marcar evento" : undefined
               }
-              title={canManage ? "Clique para marcar evento" : undefined}
               className={`min-w-0 overflow-hidden border-b border-l border-slate-100 p-1.5 [&:nth-child(6n)]:border-r-0 ${
                 canManage ? "cursor-pointer hover:bg-brand-50/40" : ""
               } ${kiosk ? "min-h-0" : "min-h-[104px]"} ${
-                inMonth ? "bg-white" : "bg-slate-50/60"
+                selected
+                  ? "bg-brand-100 ring-2 ring-inset ring-brand-400"
+                  : inMonth
+                  ? "bg-white"
+                  : "bg-slate-50/60"
               }`}
             >
               <button
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   onPickDay(dStr);
@@ -1030,6 +1195,7 @@ function MonthView({
                 {evs.slice(0, MAX).map((ev) => (
                   <button
                     key={ev.id}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelect(ev);
@@ -1050,6 +1216,7 @@ function MonthView({
                 ))}
                 {evs.length > MAX && (
                   <button
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       onPickDay(dStr);
