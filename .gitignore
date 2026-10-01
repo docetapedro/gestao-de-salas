@@ -45,3 +45,8 @@ next-env.d.ts
 /Gestao_Stock.xlsx
 /PLANO FORMATIVO.xlsx
 /PLANO 2026 - TRIMESTRE.xlsx
+/Mapa_de_formacoes.jpg
+/performance.jpg
+
+# ficheiros temporários do Excel (lock)
+~$*
