@@ -72,6 +72,37 @@ function hhmm(s: string): string {
     minute: "2-digit",
   });
 }
+// Dias (ymd) que um evento cobre, para o mostrar em cada dia das vistas
+// semanal/mensal. Um evento que acaba exatamente à meia-noite não conta o
+// último dia (acaba no início desse dia).
+function eventDayKeys(ev: EventItem): string[] {
+  const start = new Date(ev.startAt);
+  const end = new Date(ev.endAt);
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if (
+    end.getHours() === 0 &&
+    end.getMinutes() === 0 &&
+    end.getSeconds() === 0 &&
+    last > d
+  ) {
+    last.setDate(last.getDate() - 1);
+  }
+  const keys: string[] = [];
+  while (d <= last) {
+    keys.push(ymd(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return keys.length ? keys : [ymd(start)];
+}
+// Rótulo de hora para um evento num dado dia (lida com eventos de vários dias).
+function spanTimeLabel(ev: EventItem, dStr: string): string {
+  const keys = eventDayKeys(ev);
+  if (keys.length === 1) return hhmm(ev.startAt);
+  if (dStr === keys[0]) return `${hhmm(ev.startAt)} →`;
+  if (dStr === keys[keys.length - 1]) return `→ ${hhmm(ev.endAt)}`;
+  return "→";
+}
 // Dias úteis exibidos (domingo removido): segunda a sábado.
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const DAYS_SHOWN = WEEKDAYS.length; // 6
@@ -885,6 +916,7 @@ function WeekView({
               end: atTime(startD, START_HOUR + 1, 0),
             }
           : {
+              // Vários dias → um evento contínuo (do 1.º ao último dia).
               roomId: d.roomId,
               start: atTime(startD, START_HOUR, 0),
               end: atTime(endD, END_HOUR, 0),
@@ -898,10 +930,13 @@ function WeekView({
   const byCell = useMemo(() => {
     const map = new Map<string, EventItem[]>();
     for (const ev of events) {
-      const key = `${ev.room.id}|${ymd(new Date(ev.startAt))}`;
-      const arr = map.get(key) || [];
-      arr.push(ev);
-      map.set(key, arr);
+      // Evento de vários dias aparece em cada dia que abrange.
+      for (const dayKey of eventDayKeys(ev)) {
+        const key = `${ev.room.id}|${dayKey}`;
+        const arr = map.get(key) || [];
+        arr.push(ev);
+        map.set(key, arr);
+      }
     }
     for (const arr of map.values())
       arr.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
@@ -1027,7 +1062,9 @@ function WeekView({
                               }`}
                             >
                               <div className="font-semibold truncate">{ev.title}</div>
-                              <div className="opacity-80">{hhmm(ev.startAt)}</div>
+                              <div className="opacity-80">
+                                {spanTimeLabel(ev, ymd(d))}
+                              </div>
                             </button>
                           ))
                         )}
@@ -1101,7 +1138,11 @@ function MonthView({
       onCreateRef.current(
         lo === hi
           ? { start: atTime(startD, START_HOUR, 0), end: atTime(startD, START_HOUR + 1, 0) }
-          : { start: atTime(startD, START_HOUR, 0), end: atTime(endD, END_HOUR, 0) }
+          : {
+              // Vários dias → um evento contínuo (do 1.º ao último dia).
+              start: atTime(startD, START_HOUR, 0),
+              end: atTime(endD, END_HOUR, 0),
+            }
       );
     }
     window.addEventListener("mouseup", up);
@@ -1111,10 +1152,12 @@ function MonthView({
   const byDay = useMemo(() => {
     const map = new Map<string, EventItem[]>();
     for (const ev of events) {
-      const key = ymd(new Date(ev.startAt));
-      const arr = map.get(key) || [];
-      arr.push(ev);
-      map.set(key, arr);
+      // Evento de vários dias aparece em cada dia que abrange.
+      for (const dayKey of eventDayKeys(ev)) {
+        const arr = map.get(dayKey) || [];
+        arr.push(ev);
+        map.set(dayKey, arr);
+      }
     }
     for (const arr of map.values())
       arr.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
@@ -1210,7 +1253,7 @@ function MonthView({
                       kiosk ? "text-xs" : "text-[10px]"
                     }`}
                   >
-                    <span className="opacity-80">{hhmm(ev.startAt)} </span>
+                    <span className="opacity-80">{spanTimeLabel(ev, dStr)} </span>
                     {ev.title}
                   </button>
                 ))}
