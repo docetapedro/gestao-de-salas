@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DatePicker, { registerLocale } from "react-datepicker";
 import { ptBR } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
-import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Plus, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLivePoll } from "@/lib/useLivePoll";
 import { cn } from "@/lib/utils";
@@ -178,6 +178,8 @@ export default function RoomGrid({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<EventItem | null>(null);
+  // Dia (ymd) cujos eventos estão a ser listados na modal "eventos do dia".
+  const [dayModal, setDayModal] = useState<string | null>(null);
   const [kiosk, setKiosk] = useState(false);
   const [clock, setClock] = useState("");
   const [nowTs, setNowTs] = useState(() => Date.now());
@@ -344,6 +346,28 @@ export default function RoomGrid({
     }
   }
 
+  // Abre a modal com os eventos de um dia (todas as salas).
+  function openDay(dStr: string) {
+    setDayModal(dStr);
+  }
+
+  // Botão "Novo": abre a criação pré-preenchida com a hora atual (arredondada
+  // ao próximo quarto de hora) e duração de 1 hora.
+  function openCreateNow() {
+    const start = new Date();
+    start.setSeconds(0, 0);
+    start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15);
+    openCreate({ start, end: new Date(start.getTime() + 60 * 60000) });
+  }
+
+  // "Novo neste dia" (a partir da modal de eventos do dia): pré-preenche o dia
+  // às 08:00–09:00 e fecha a lista.
+  function openCreateDay(dStr: string) {
+    const base = new Date(`${dStr}T00:00:00`);
+    setDayModal(null);
+    openCreate({ start: atTime(base, START_HOUR, 0), end: atTime(base, START_HOUR + 1, 0) });
+  }
+
   // Sincroniza com a saída de tela cheia via Esc.
   useEffect(() => {
     function onFs() {
@@ -437,6 +461,7 @@ export default function RoomGrid({
         rooms={rooms}
         events={events}
         onSelect={setSelected}
+        onDayClick={openDay}
         kiosk={kiosk}
         todayStr={todayStr}
         nextEventIds={nextEventIds}
@@ -450,6 +475,7 @@ export default function RoomGrid({
         rooms={rooms}
         events={events}
         onSelect={setSelected}
+        onDayClick={openDay}
         kiosk={kiosk}
         todayStr={todayStr}
         nextEventIds={nextEventIds}
@@ -462,10 +488,7 @@ export default function RoomGrid({
         refDate={ref}
         events={events}
         onSelect={setSelected}
-        onPickDay={(d) => {
-          setDate(d);
-          setView("day");
-        }}
+        onDayClick={openDay}
         kiosk={kiosk}
         todayStr={todayStr}
         nextEventIds={nextEventIds}
@@ -497,6 +520,17 @@ export default function RoomGrid({
               </div>
               <Legend className="mt-1 justify-end text-xs" />
             </div>
+            {canManage && (
+              <Button
+                variant="default"
+                size="lg"
+                onClick={openCreateNow}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                title="Criar novo evento"
+              >
+                <Plus className="h-4 w-4" /> Novo
+              </Button>
+            )}
             <Button
               variant="navy"
               size="lg"
@@ -508,6 +542,16 @@ export default function RoomGrid({
           </div>
         </div>
         <div className="flex-1 min-h-0">{body}</div>
+        {dayModal && (
+          <DayEventsModal
+            dayStr={dayModal}
+            events={events}
+            onSelect={(ev) => setSelected(ev)}
+            onClose={() => setDayModal(null)}
+            canManage={canManage}
+            onCreateDay={() => openCreateDay(dayModal)}
+          />
+        )}
         {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
         {createOpen && (
           <CreateEventModal
@@ -572,6 +616,16 @@ export default function RoomGrid({
           >
             <Maximize2 className="h-4 w-4" /> Tela cheia
           </Button>
+          {canManage && (
+            <Button
+              variant="default"
+              onClick={openCreateNow}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              title="Criar novo evento"
+            >
+              <Plus className="h-4 w-4" /> Novo
+            </Button>
+          )}
         </div>
       </div>
 
@@ -587,6 +641,16 @@ export default function RoomGrid({
 
       {body}
 
+      {dayModal && (
+        <DayEventsModal
+          dayStr={dayModal}
+          events={events}
+          onSelect={(ev) => setSelected(ev)}
+          onClose={() => setDayModal(null)}
+          canManage={canManage}
+          onCreateDay={() => openCreateDay(dayModal)}
+        />
+      )}
       {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
       {createOpen && (
         <CreateEventModal
@@ -618,6 +682,7 @@ function DayView({
   rooms,
   events,
   onSelect,
+  onDayClick,
   kiosk,
   todayStr,
   nextEventIds,
@@ -629,6 +694,7 @@ function DayView({
   rooms: Room[];
   events: EventItem[];
   onSelect: (e: EventItem) => void;
+  onDayClick: (ymd: string) => void;
   kiosk: boolean;
   todayStr: string;
   nextEventIds: Set<string>;
@@ -657,6 +723,12 @@ function DayView({
   dayStartRef.current = dayStart;
   const onCreateRef = useRef(onCreate);
   onCreateRef.current = onCreate;
+  const onDayClickRef = useRef(onDayClick);
+  onDayClickRef.current = onDayClick;
+  const canManageRef = useRef(canManage);
+  canManageRef.current = canManage;
+  const dateRef = useRef(date);
+  dateRef.current = date;
   useEffect(() => {
     function up() {
       const d = tdragRef.current;
@@ -664,6 +736,12 @@ function DayView({
       setTdrag(null);
       const lo = Math.min(d.aMin, d.bMin);
       const hi = Math.max(d.aMin, d.bMin);
+      // Clique simples (sem arrasto apreciável) ou sem permissão → lista os
+      // eventos do dia em vez de criar.
+      if (hi - lo < 10 || !canManageRef.current) {
+        onDayClickRef.current(dateRef.current);
+        return;
+      }
       const startMin = Math.floor(lo / 60) * 60;
       let endMin = Math.ceil(hi / 60) * 60;
       if (endMin <= startMin) endMin = startMin + 60;
@@ -758,7 +836,6 @@ function DayView({
                   </div>
                   <div
                     onMouseDown={(e) => {
-                      if (!canManage) return;
                       e.preventDefault();
                       const rect = e.currentTarget.getBoundingClientRect();
                       const m =
@@ -781,19 +858,20 @@ function DayView({
                     }}
                     title={
                       canManage
-                        ? "Clique ou arraste para marcar evento"
-                        : undefined
+                        ? "Clique para ver eventos · arraste para marcar"
+                        : "Clique para ver os eventos do dia"
                     }
-                    className={`relative flex-1 bg-green-100 ${
-                      canManage ? "cursor-pointer select-none" : ""
-                    } ${kiosk ? "" : "h-24"}`}
+                    className={`relative flex-1 bg-green-100 cursor-pointer select-none ${
+                      kiosk ? "" : "h-24"
+                    }`}
                   >
                     <div className="absolute inset-0 flex pointer-events-none">
                       {HOURS.map((h) => (
                         <div key={h} className="flex-1 border-l border-white/70" />
                       ))}
                     </div>
-                    {tdrag &&
+                    {canManage &&
+                      tdrag &&
                       tdrag.roomId === room.id &&
                       (() => {
                         const lo = Math.min(tdrag.aMin, tdrag.bMin);
@@ -868,6 +946,7 @@ function WeekView({
   rooms,
   events,
   onSelect,
+  onDayClick,
   kiosk,
   todayStr,
   nextEventIds,
@@ -879,6 +958,7 @@ function WeekView({
   rooms: Room[];
   events: EventItem[];
   onSelect: (e: EventItem) => void;
+  onDayClick: (ymd: string) => void;
   kiosk: boolean;
   todayStr: string;
   nextEventIds: Set<string>;
@@ -897,6 +977,10 @@ function WeekView({
   daysRef.current = days;
   const onCreateRef = useRef(onCreate);
   onCreateRef.current = onCreate;
+  const onDayClickRef = useRef(onDayClick);
+  onDayClickRef.current = onDayClick;
+  const canManageRef = useRef(canManage);
+  canManageRef.current = canManage;
   useEffect(() => {
     function up() {
       const d = dragRef.current;
@@ -908,20 +992,17 @@ function WeekView({
       const startD = dd[lo];
       const endD = dd[hi];
       if (!startD || !endD) return;
-      onCreateRef.current(
-        lo === hi
-          ? {
-              roomId: d.roomId,
-              start: atTime(startD, START_HOUR, 0),
-              end: atTime(startD, START_HOUR + 1, 0),
-            }
-          : {
-              // Vários dias → um evento contínuo (do 1.º ao último dia).
-              roomId: d.roomId,
-              start: atTime(startD, START_HOUR, 0),
-              end: atTime(endD, END_HOUR, 0),
-            }
-      );
+      // Clique simples (um só dia) ou sem permissão → lista os eventos do dia.
+      if (lo === hi || !canManageRef.current) {
+        onDayClickRef.current(ymd(startD));
+        return;
+      }
+      // Arrasto por vários dias → um evento contínuo (do 1.º ao último dia).
+      onCreateRef.current({
+        roomId: d.roomId,
+        start: atTime(startD, START_HOUR, 0),
+        end: atTime(endD, END_HOUR, 0),
+      });
     }
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
@@ -1015,12 +1096,12 @@ function WeekView({
                             hi: Math.max(drag.a, drag.b),
                           }
                         : null;
-                    const selected = !!sel && i >= sel.lo && i <= sel.hi;
+                    const selected =
+                      canManage && !!sel && i >= sel.lo && i <= sel.hi;
                     return (
                       <div
                         key={i}
                         onMouseDown={(e) => {
-                          if (!canManage) return;
                           e.preventDefault();
                           setDrag({ roomId: room.id, a: i, b: i });
                         }}
@@ -1031,12 +1112,12 @@ function WeekView({
                         }}
                         title={
                           canManage
-                            ? "Clique ou arraste para marcar evento"
-                            : undefined
+                            ? "Clique para ver eventos · arraste para marcar"
+                            : "Clique para ver os eventos do dia"
                         }
-                        className={`flex-1 min-w-0 border-l border-slate-100 p-1.5 space-y-1 ${
-                          canManage ? "cursor-pointer hover:bg-slate-50/60" : ""
-                        } ${isToday ? "bg-brand-50/40" : ""} ${
+                        className={`flex-1 min-w-0 border-l border-slate-100 p-1.5 space-y-1 cursor-pointer hover:bg-slate-50/60 ${
+                          isToday ? "bg-brand-50/40" : ""
+                        } ${
                           selected ? "bg-brand-100 ring-2 ring-inset ring-brand-400" : ""
                         }`}
                       >
@@ -1086,7 +1167,7 @@ function MonthView({
   refDate,
   events,
   onSelect,
-  onPickDay,
+  onDayClick,
   kiosk,
   todayStr,
   nextEventIds,
@@ -1097,7 +1178,7 @@ function MonthView({
   refDate: Date;
   events: EventItem[];
   onSelect: (e: EventItem) => void;
-  onPickDay: (ymd: string) => void;
+  onDayClick: (ymd: string) => void;
   kiosk: boolean;
   todayStr: string;
   nextEventIds: Set<string>;
@@ -1124,6 +1205,10 @@ function MonthView({
   cellsRef.current = cells;
   const onCreateRef = useRef(onCreate);
   onCreateRef.current = onCreate;
+  const onDayClickRef = useRef(onDayClick);
+  onDayClickRef.current = onDayClick;
+  const canManageRef = useRef(canManage);
+  canManageRef.current = canManage;
   useEffect(() => {
     function up() {
       const d = dragRef.current;
@@ -1135,15 +1220,16 @@ function MonthView({
       const startD = cc[lo];
       const endD = cc[hi];
       if (!startD || !endD) return;
-      onCreateRef.current(
-        lo === hi
-          ? { start: atTime(startD, START_HOUR, 0), end: atTime(startD, START_HOUR + 1, 0) }
-          : {
-              // Vários dias → um evento contínuo (do 1.º ao último dia).
-              start: atTime(startD, START_HOUR, 0),
-              end: atTime(endD, END_HOUR, 0),
-            }
-      );
+      // Clique simples (um só dia) ou sem permissão → lista os eventos do dia.
+      if (lo === hi || !canManageRef.current) {
+        onDayClickRef.current(ymd(startD));
+        return;
+      }
+      // Arrasto por vários dias → um evento contínuo (do 1.º ao último dia).
+      onCreateRef.current({
+        start: atTime(startD, START_HOUR, 0),
+        end: atTime(endD, END_HOUR, 0),
+      });
     }
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
@@ -1189,12 +1275,12 @@ function MonthView({
           const sel = drag
             ? { lo: Math.min(drag.a, drag.b), hi: Math.max(drag.a, drag.b) }
             : null;
-          const selected = !!sel && i >= sel.lo && i <= sel.hi;
+          const selected =
+            canManage && !!sel && i >= sel.lo && i <= sel.hi;
           return (
             <div
               key={i}
               onMouseDown={(e) => {
-                if (!canManage) return;
                 e.preventDefault();
                 setDrag({ a: i, b: i });
               }}
@@ -1203,11 +1289,13 @@ function MonthView({
                 if (dr) setDrag({ a: dr.a, b: i });
               }}
               title={
-                canManage ? "Clique ou arraste para marcar evento" : undefined
+                canManage
+                  ? "Clique para ver eventos · arraste para marcar"
+                  : "Clique para ver os eventos do dia"
               }
-              className={`min-w-0 overflow-hidden border-b border-l border-slate-100 p-1.5 [&:nth-child(6n)]:border-r-0 ${
-                canManage ? "cursor-pointer hover:bg-brand-50/40" : ""
-              } ${kiosk ? "min-h-0" : "min-h-[104px]"} ${
+              className={`min-w-0 overflow-hidden border-b border-l border-slate-100 p-1.5 [&:nth-child(6n)]:border-r-0 cursor-pointer hover:bg-brand-50/40 ${
+                kiosk ? "min-h-0" : "min-h-[104px]"
+              } ${
                 selected
                   ? "bg-brand-100 ring-2 ring-inset ring-brand-400"
                   : inMonth
@@ -1219,7 +1307,7 @@ function MonthView({
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPickDay(dStr);
+                  onDayClick(dStr);
                 }}
                 className={`mb-1 flex items-center justify-center rounded-full transition hover:bg-brand-100 ${
                   kiosk ? "h-8 w-8 text-sm" : "h-6 w-6 text-xs"
@@ -1230,7 +1318,7 @@ function MonthView({
                     ? "text-slate-600"
                     : "text-slate-300"
                 }`}
-                title="Ver dia"
+                title="Ver eventos do dia"
               >
                 {d.getDate()}
               </button>
@@ -1262,7 +1350,7 @@ function MonthView({
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPickDay(dStr);
+                      onDayClick(dStr);
                     }}
                     className={`text-brand-600 hover:underline pl-1 ${
                       kiosk ? "text-xs" : "text-[10px]"
@@ -1470,6 +1558,95 @@ function CreateEventModal({
           box-shadow: 0 0 0 2px #bfdbfe;
         }
       `}</style>
+    </div>
+  );
+}
+
+/* --------------------------- MODAL: EVENTOS DO DIA ------------------------------ */
+function DayEventsModal({
+  dayStr,
+  events,
+  onSelect,
+  onClose,
+  canManage,
+  onCreateDay,
+}: {
+  dayStr: string;
+  events: EventItem[];
+  onSelect: (e: EventItem) => void;
+  onClose: () => void;
+  canManage: boolean;
+  onCreateDay: () => void;
+}) {
+  // Eventos que tocam este dia (inclui os de vários dias), ordenados por início.
+  const list = events
+    .filter((ev) => eventDayKeys(ev).includes(dayStr))
+    .sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+  const title = new Date(`${dayStr}T12:00:00`).toLocaleDateString("pt-PT", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-navy text-white px-5 py-4 flex items-center justify-between gap-3">
+          <h3 className="font-bold text-lg capitalize">{title}</h3>
+          <span className="text-brand-200 text-sm shrink-0">
+            {list.length} evento(s)
+          </span>
+        </div>
+        <div className="p-5 space-y-2 max-h-[60vh] overflow-auto">
+          {list.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-4">
+              Sem eventos neste dia.
+            </p>
+          ) : (
+            list.map((ev) => (
+              <button
+                key={ev.id}
+                onClick={() => onSelect(ev)}
+                className="w-full text-left rounded-lg border border-slate-200 hover:bg-slate-50 px-3 py-2 flex items-center gap-3 transition"
+              >
+                <span
+                  className="inline-block h-3 w-3 rounded-full shrink-0"
+                  style={{ background: ev.room.color }}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-semibold text-slate-800 truncate">
+                    {ev.title}
+                  </span>
+                  <span className="block text-xs text-slate-500 truncate">
+                    {spanTimeLabel(ev, dayStr)} · {ev.room.name}
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+        <div className="px-5 pb-5 flex gap-2">
+          {canManage && (
+            <Button
+              type="button"
+              variant="navy"
+              className="flex-1"
+              onClick={onCreateDay}
+            >
+              <Plus className="h-4 w-4" /> Novo neste dia
+            </Button>
+          )}
+          <Button variant="secondary" onClick={onClose} className="flex-1">
+            Fechar
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

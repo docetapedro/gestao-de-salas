@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
-import { findConflict } from "@/lib/events";
+import { updateEvent, EventConflictError } from "@/lib/events";
 import { TAGS } from "@/lib/agenda-cache";
 import { revalidateTag } from "next/cache";
 
@@ -27,39 +27,30 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (endAt <= startAt)
       return json({ error: "O fim deve ser depois do início" }, 400);
 
-    const conflict = await findConflict(roomId, startAt, endAt, id);
-    if (conflict) {
-      return json(
-        { error: `Conflito com o evento "${conflict.title}" nesta sala` },
-        409
-      );
-    }
-
     // Se mudou o horário de início, reabilita o aviso por email.
     const startChanged = startAt.getTime() !== existing.startAt.getTime();
 
-    const event = await prisma.event.update({
-      where: { id },
-      data: {
-        title: body.title !== undefined ? String(body.title).trim() : undefined,
-        description:
-          body.description !== undefined
-            ? body.description
-              ? String(body.description).trim()
-              : null
-            : undefined,
-        roomId,
-        startAt,
-        endAt,
-        notifiedAt: startChanged ? null : undefined,
-      },
-      include: {
-        room: { select: { id: true, name: true, color: true } },
-      },
+    // Atómico: lock da sala + verificação de conflito (ignorando o próprio) +
+    // atualização, na mesma transação (sem corridas).
+    const event = await updateEvent(id, {
+      roomId,
+      startAt,
+      endAt,
+      title: body.title !== undefined ? String(body.title).trim() : undefined,
+      description:
+        body.description !== undefined
+          ? body.description
+            ? String(body.description).trim()
+            : null
+          : undefined,
+      notifiedAt: startChanged ? null : undefined,
     });
     revalidateTag(TAGS.events); // atualiza a agenda pública
     return json({ event });
   } catch (err) {
+    if (err instanceof EventConflictError) {
+      return json({ error: err.message }, 409);
+    }
     return handleError(err);
   }
 }

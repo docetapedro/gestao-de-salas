@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { assertAuthenticated, assertCan } from "@/lib/permissions";
 import { json, handleError } from "@/lib/http";
-import { findConflict } from "@/lib/events";
+import { createEvent, createEventSeries, EventConflictError } from "@/lib/events";
 import { TAGS } from "@/lib/agenda-cache";
 import { revalidateTag } from "next/cache";
 import { randomUUID } from "crypto";
@@ -83,18 +83,14 @@ export async function POST(req: NextRequest) {
 
     // --- Evento único ---
     if (repeat === "none") {
-      const conflict = await findConflict(roomId, startAt, endAt);
-      if (conflict) {
-        return json(
-          {
-            error: `Conflito com o evento "${conflict.title}" nesta sala nesse horário`,
-          },
-          409
-        );
-      }
-      const event = await prisma.event.create({
-        data: { title, description, roomId, startAt, endAt, createdById: session.sub },
-        include: { room: { select: { id: true, name: true, color: true } } },
+      // Atómico: lock da sala + verificação de conflito + criação (sem corridas).
+      const event = await createEvent({
+        title,
+        description,
+        roomId,
+        startAt,
+        endAt,
+        createdById: session.sub,
       });
       revalidateTag(TAGS.events); // atualiza a agenda pública
       return json({ event }, 201);
@@ -119,33 +115,23 @@ export async function POST(req: NextRequest) {
     }
 
     const seriesId = randomUUID();
-    const toCreate = [];
-    let skipped = 0;
-    for (const o of occ) {
-      const conflict = await findConflict(roomId, o.start, o.end);
-      if (conflict) {
-        skipped++;
-        continue;
-      }
-      toCreate.push({
-        title,
-        description,
-        roomId,
-        startAt: o.start,
-        endAt: o.end,
-        createdById: session.sub,
-        seriesId,
-      });
-    }
-    if (toCreate.length > 0) {
-      await prisma.event.createMany({ data: toCreate });
+    // Atómico: lock da sala + verificação em bloco + inserção em lote.
+    const { created, skipped } = await createEventSeries({
+      roomId,
+      title,
+      description,
+      createdById: session.sub,
+      seriesId,
+      occurrences: occ,
+    });
+    if (created > 0) {
       revalidateTag(TAGS.events); // atualiza a agenda pública
     }
-    return json(
-      { created: toCreate.length, skipped, total: occ.length, seriesId },
-      201
-    );
+    return json({ created, skipped, total: occ.length, seriesId }, 201);
   } catch (err) {
+    if (err instanceof EventConflictError) {
+      return json({ error: err.message }, 409);
+    }
     return handleError(err);
   }
 }
