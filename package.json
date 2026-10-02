@@ -11,6 +11,7 @@
     "db:push": "prisma db push --schema prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:events": "tsx prisma/seed-events.ts",
+    "db:fix:events": "tsx scripts/fix-event-anomalies.ts",
     "db:seed:projetos": "tsx prisma/seed-projetos.ts",
     "db:seed:indicadores": "tsx prisma/seed-indicadores.ts",
     "db:seed:performance": "tsx prisma/seed-performance.ts",
