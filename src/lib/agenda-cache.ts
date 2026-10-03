@@ -46,6 +46,7 @@ export const getEventosPublicosCached = unstable_cache(
         description: true,
         startAt: true,
         endAt: true,
+        seriesId: true,
         room: { select: { id: true, name: true, color: true } },
       },
     });

@@ -20,8 +20,26 @@ type EventItem = {
   description: string | null;
   startAt: string;
   endAt: string;
+  seriesId?: string | null;
   room: { id: string; name: string; color: string };
 };
+
+// Dentro de um mesmo dia, uma série recorrente deve ocupar no máximo UM bloco:
+// as ocorrências multi-dia de uma série sobrepõem-se e, de outro modo, cada uma
+// seria replicada em todos os dias que abrange, enchendo a grelha. Mantém a 1.ª
+// ocorrência de cada série; eventos sem série são todos mantidos.
+function collapseSeriesPerDay(list: EventItem[]): EventItem[] {
+  const seen = new Set<string>();
+  const out: EventItem[] = [];
+  for (const ev of list) {
+    if (ev.seriesId) {
+      if (seen.has(ev.seriesId)) continue;
+      seen.add(ev.seriesId);
+    }
+    out.push(ev);
+  }
+  return out;
+}
 
 type View = "day" | "week" | "month";
 
@@ -94,6 +112,20 @@ function eventDayKeys(ev: EventItem): string[] {
     d.setDate(d.getDate() + 1);
   }
   return keys.length ? keys : [ymd(start)];
+}
+// Intervalo início–fim de um evento, legível na lista da modal do dia. Para
+// eventos de vários dias mostra data+hora nos dois extremos.
+function eventRangeLabel(ev: EventItem): string {
+  const s = new Date(ev.startAt);
+  const e = new Date(ev.endAt);
+  const sameDay =
+    s.getFullYear() === e.getFullYear() &&
+    s.getMonth() === e.getMonth() &&
+    s.getDate() === e.getDate();
+  if (sameDay) return `${hhmm(ev.startAt)}–${hhmm(ev.endAt)}`;
+  const d = (x: string) =>
+    new Date(x).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
+  return `${d(ev.startAt)} ${hhmm(ev.startAt)} → ${d(ev.endAt)} ${hhmm(ev.endAt)}`;
 }
 // Rótulo de hora para um evento num dado dia (lida com eventos de vários dias).
 function spanTimeLabel(ev: EventItem, dStr: string): string {
@@ -775,6 +807,11 @@ function DayView({
       arr.push(ev);
       map.set(ev.room.id, arr);
     }
+    // Um bloco por série em cada sala (evita a pilha de ocorrências sobrepostas).
+    for (const [k, arr] of map) {
+      arr.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+      map.set(k, collapseSeriesPerDay(arr));
+    }
     return map;
   }, [events]);
 
@@ -1019,8 +1056,10 @@ function WeekView({
         map.set(key, arr);
       }
     }
-    for (const arr of map.values())
+    for (const [key, arr] of map) {
       arr.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+      map.set(key, collapseSeriesPerDay(arr)); // 1 bloco por série em cada dia
+    }
     return map;
   }, [events]);
 
@@ -1245,8 +1284,10 @@ function MonthView({
         map.set(dayKey, arr);
       }
     }
-    for (const arr of map.values())
+    for (const [key, arr] of map) {
       arr.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+      map.set(key, collapseSeriesPerDay(arr)); // 1 bloco por série em cada dia
+    }
     return map;
   }, [events]);
 
@@ -1578,10 +1619,13 @@ function DayEventsModal({
   canManage: boolean;
   onCreateDay: () => void;
 }) {
-  // Eventos que tocam este dia (inclui os de vários dias), ordenados por início.
-  const list = events
-    .filter((ev) => eventDayKeys(ev).includes(dayStr))
-    .sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+  // Eventos que tocam este dia (inclui os de vários dias), ordenados por início,
+  // com as séries colapsadas a um bloco por série.
+  const list = collapseSeriesPerDay(
+    events
+      .filter((ev) => eventDayKeys(ev).includes(dayStr))
+      .sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt))
+  );
   const title = new Date(`${dayStr}T12:00:00`).toLocaleDateString("pt-PT", {
     weekday: "long",
     day: "2-digit",
@@ -1624,7 +1668,7 @@ function DayEventsModal({
                     {ev.title}
                   </span>
                   <span className="block text-xs text-slate-500 truncate">
-                    {spanTimeLabel(ev, dayStr)} · {ev.room.name}
+                    {eventRangeLabel(ev)} · {ev.room.name}
                   </span>
                 </span>
               </button>
