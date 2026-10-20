@@ -324,14 +324,20 @@ export default function RoomGrid({
 
   function openCreate(prefill: CreatePrefill) {
     if (!canManage || rooms.length === 0) return;
+    // Seleção de vários dias (arrasto na semana/mês) → série DIÁRIA: um evento
+    // por dia, só nas horas indicadas, em vez de um único bloco contínuo que
+    // ocuparia também as noites e bloquearia o período inteiro. Assim cada dia
+    // fica ocupado apenas na sua janela e os restantes horários continuam
+    // reserváveis (ex.: manhã e tarde na mesma sala, no mesmo dia).
+    const multiDay = ymd(prefill.start) !== ymd(prefill.end);
     setCForm({
       title: "",
       roomId: prefill.roomId || rooms[0]?.id || "",
       startAt: prefill.start,
-      endAt: prefill.end,
+      endAt: multiDay ? atTime(prefill.start, END_HOUR, 0) : prefill.end,
       description: "",
-      repeat: "none",
-      repeatUntil: null,
+      repeat: multiDay ? "daily" : "none",
+      repeatUntil: multiDay ? prefill.end : null,
     });
     setCError(null);
     setCreateOpen(true);
@@ -1034,7 +1040,9 @@ function WeekView({
         onDayClickRef.current(ymd(startD));
         return;
       }
-      // Arrasto por vários dias → um evento contínuo (do 1.º ao último dia).
+      // Arrasto por vários dias → série diária (um evento por dia); a conversão
+      // acontece em openCreate (ver nota lá). start/end marcam a janela do 1.º
+      // dia; o último dia define o "repetir até".
       onCreateRef.current({
         roomId: d.roomId,
         start: atTime(startD, START_HOUR, 0),
@@ -1264,7 +1272,9 @@ function MonthView({
         onDayClickRef.current(ymd(startD));
         return;
       }
-      // Arrasto por vários dias → um evento contínuo (do 1.º ao último dia).
+      // Arrasto por vários dias → série diária (um evento por dia); a conversão
+      // acontece em openCreate (ver nota lá). start/end marcam a janela do 1.º
+      // dia; o último dia define o "repetir até".
       onCreateRef.current({
         start: atTime(startD, START_HOUR, 0),
         end: atTime(endD, END_HOUR, 0),
