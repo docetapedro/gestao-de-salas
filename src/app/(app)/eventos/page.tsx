@@ -250,7 +250,10 @@ export default function EventosPage() {
         );
         setShowForm(false);
         await load();
-        if (form.repeat !== "none" && res.created !== undefined) {
+        // res.created vem definido quando o servidor criou uma SÉRIE — quer por
+        // o utilizador ter escolhido repetição, quer por auto-conversão de um
+        // evento único que atravessava vários dias.
+        if (res.created !== undefined) {
           toast.success(
             `Série criada: ${res.created} evento(s).` +
               (res.skipped ? ` ${res.skipped} ignorado(s) por conflito.` : "")

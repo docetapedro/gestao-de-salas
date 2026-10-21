@@ -371,7 +371,9 @@ export default function RoomGrid({
       );
       setCreateOpen(false);
       await load();
-      if (cForm.repeat !== "none" && res.created !== undefined) {
+      // res.created definido = o servidor criou uma série (repetição escolhida
+      // ou auto-conversão de um evento único que atravessava vários dias).
+      if (res.created !== undefined) {
         alert(
           `Série criada: ${res.created} evento(s).` +
             (res.skipped ? ` ${res.skipped} ignorado(s) por conflito.` : "")

@@ -6,23 +6,57 @@
  *   2) Sobreposições       — eventos da mesma sala cujos horários se cruzam
  *      (sem serem duplicados exatos). SÓ são reportados — nunca removidos
  *      automaticamente, porque exigem decisão manual sobre qual manter.
+ *   3) Blocos contínuos multi-dia — evento ÚNICO (sem seriesId) cujo início e
+ *      fim caem em dias diferentes. Ocupa a sala ininterruptamente (noites
+ *      incluídas) e gera falsos conflitos com eventos no horário livre dos dias
+ *      do meio. Com --split-multiday converte-os numa série DIÁRIA: 1 bloco por
+ *      dia (seg–sáb) só no horário indicado — a mesma regra que a app já aplica
+ *      a novos eventos.
  *
  * Uso:
  *   Relatório (não altera nada):
  *     npx tsx scripts/fix-event-anomalies.ts
  *   Aplicar (remove os duplicados exatos):
  *     npx tsx scripts/fix-event-anomalies.ts --apply
+ *   Converter blocos contínuos multi-dia em séries diárias:
+ *     npx tsx scripts/fix-event-anomalies.ts --split-multiday --apply
+ *   (sem --apply, --split-multiday apenas mostra o plano de conversão)
  *
  * Requer DATABASE_URL de PRODUÇÃO e o cliente Prisma do Postgres
  * (se necessário: prisma generate --schema prisma/schema.prisma).
  */
 import { PrismaClient } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes("--apply");
+const SPLIT = process.argv.includes("--split-multiday");
 
 function fmt(d: Date): string {
   return d.toISOString().slice(0, 16).replace("T", " ");
+}
+
+// A app opera no fuso de Angola (UTC+1, sem horário de verão). Para extrair o
+// dia/hora "de parede" e reconstruir instantes por dia usamos esse desvio fixo.
+const LUANDA_OFFSET_MS = 3600_000;
+function luandaParts(d: Date) {
+  const u = new Date(d.getTime() + LUANDA_OFFSET_MS);
+  return {
+    y: u.getUTCFullYear(),
+    mo: u.getUTCMonth(),
+    day: u.getUTCDate(),
+    h: u.getUTCHours(),
+    mi: u.getUTCMinutes(),
+  };
+}
+function luandaInstant(
+  y: number,
+  mo: number,
+  day: number,
+  h: number,
+  mi: number
+): Date {
+  return new Date(Date.UTC(y, mo, day, h, mi) - LUANDA_OFFSET_MS);
 }
 
 async function main() {
@@ -36,6 +70,7 @@ async function main() {
       startAt: true,
       endAt: true,
       createdAt: true,
+      createdById: true,
       seriesId: true,
       room: { select: { name: true } },
     },
@@ -114,6 +149,93 @@ async function main() {
     );
   }
   if (overlaps.length > 60) console.log(`  … +${overlaps.length - 60} mais`);
+
+  /* 3) Blocos contínuos multi-dia (evento único a atravessar dias) --------- */
+  const multi = remaining.filter((e) => {
+    if (e.seriesId) return false; // séries já são 1 bloco por dia
+    const s = luandaParts(e.startAt);
+    const en = luandaParts(e.endAt);
+    return s.y !== en.y || s.mo !== en.mo || s.day !== en.day;
+  });
+
+  console.log(`\n== Blocos contínuos multi-dia (evento único a atravessar dias) ==`);
+  console.log(
+    `Encontrados: ${multi.length}` +
+      (SPLIT
+        ? APPLY
+          ? "  (a converter em série diária)"
+          : "  (--split-multiday sem --apply → só plano)"
+        : "  (usa --split-multiday para converter em série diária)")
+  );
+
+  let converted = 0;
+  for (const e of multi) {
+    const s = luandaParts(e.startAt);
+    const en = luandaParts(e.endAt);
+    const startTOD = s.h * 60 + s.mi;
+    const endTOD = en.h * 60 + en.mi;
+    const header = `  ${e.room.name}: "${e.title}" ${fmt(e.startAt)}–${fmt(e.endAt)} (${e.id})`;
+
+    if (endTOD <= startTOD) {
+      console.log(`${header}\n      [MANUAL] hora de fim ≤ início — não dá para dividir por dia`);
+      continue;
+    }
+
+    // Uma ocorrência por dia (seg–sáb), do dia de início ao dia de fim.
+    const occ: { start: Date; end: Date }[] = [];
+    let cur = Date.UTC(s.y, s.mo, s.day);
+    const lastUTC = Date.UTC(en.y, en.mo, en.day);
+    while (cur <= lastUTC) {
+      const dd = new Date(cur);
+      if (dd.getUTCDay() !== 0) {
+        // pula domingo
+        occ.push({
+          start: luandaInstant(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), s.h, s.mi),
+          end: luandaInstant(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), en.h, en.mi),
+        });
+      }
+      cur += 86_400_000; // +1 dia (UTC não tem DST)
+    }
+
+    // Não recria dias que colidam com OUTROS eventos da mesma sala.
+    const others = (byRoom.get(e.roomId) ?? []).filter((o) => o.id !== e.id);
+    const kept = occ.filter(
+      (o) => !others.some((x) => +x.startAt < +o.end && +x.endAt > +o.start)
+    );
+    const skippedDays = occ.length - kept.length;
+
+    console.log(
+      `${header}\n      → ${kept.length} dia(s) ${fmt(kept[0]?.start ?? e.startAt).slice(11)}–${fmt(
+        kept[0]?.end ?? e.endAt
+      ).slice(11)}` + (skippedDays ? `  (${skippedDays} dia(s) ignorado(s) por conflito)` : "")
+    );
+
+    if (SPLIT && APPLY) {
+      const seriesId = randomUUID();
+      await prisma.$transaction(async (tx) => {
+        await tx.event.delete({ where: { id: e.id } });
+        if (kept.length > 0) {
+          await tx.event.createMany({
+            data: kept.map((o) => ({
+              title: e.title,
+              description: e.description,
+              roomId: e.roomId,
+              startAt: o.start,
+              endAt: o.end,
+              createdById: e.createdById ?? null,
+              seriesId,
+            })),
+          });
+        }
+      });
+      converted++;
+    }
+  }
+  if (SPLIT && APPLY) {
+    console.log(`\n✔ Convertidos ${converted} bloco(s) contínuo(s) em série diária.`);
+  } else if (multi.length > 0 && !SPLIT) {
+    console.log(`\n(Para converter: corre com --split-multiday --apply)`);
+  }
 
   /* Aplicação --------------------------------------------------------------- */
   if (!toDelete.length) {

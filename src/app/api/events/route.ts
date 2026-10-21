@@ -79,7 +79,38 @@ export async function POST(req: NextRequest) {
       return json({ error: "O fim deve ser depois do início" }, 400);
 
     const description = body.description ? String(body.description).trim() : null;
-    const repeat: string = body.repeat || "none";
+    let repeat: string = body.repeat || "none";
+
+    // Normaliza eventos ÚNICOS que atravessam vários dias → série DIÁRIA.
+    // Um único bloco contínuo multi-dia ocuparia também as noites e bloquearia
+    // o período inteiro (foi o falso conflito do "Excel Intermédio": um bloco
+    // 19→23/10 14:00–17:00 contínuo bloqueava a manhã de 22/10). Convertemos
+    // para 1 ocorrência por dia, só no horário indicado — igual ao que o
+    // arrasto multi-dia já faz no cliente, mas aqui centralizado no servidor
+    // para cobrir todos os caminhos (formulário, arrasto e API direta).
+    let seriesEnd = endAt; // fim de cada ocorrência (mesmo dia do início)
+    let seriesUntil = body.repeatUntil ? new Date(body.repeatUntil) : null;
+    const sameDay =
+      startAt.getFullYear() === endAt.getFullYear() &&
+      startAt.getMonth() === endAt.getMonth() &&
+      startAt.getDate() === endAt.getDate();
+    if (repeat === "none" && !sameDay) {
+      const startTOD = startAt.getHours() * 60 + startAt.getMinutes();
+      const endTOD = endAt.getHours() * 60 + endAt.getMinutes();
+      if (endTOD <= startTOD) {
+        return json(
+          {
+            error:
+              "Num evento de vários dias, a hora de fim tem de ser posterior à de início — cada dia fica reservado só nesse horário.",
+          },
+          400
+        );
+      }
+      repeat = "daily";
+      seriesEnd = new Date(startAt);
+      seriesEnd.setHours(endAt.getHours(), endAt.getMinutes(), 0, 0);
+      seriesUntil = endAt; // o último dia do intervalo
+    }
 
     // --- Evento único ---
     if (repeat === "none") {
@@ -100,7 +131,7 @@ export async function POST(req: NextRequest) {
     if (!["daily", "weekly", "monthly"].includes(repeat)) {
       return json({ error: "Tipo de repetição inválido" }, 400);
     }
-    const until = body.repeatUntil ? new Date(body.repeatUntil) : null;
+    const until = seriesUntil;
     if (!until || isNaN(until.getTime())) {
       return json({ error: "Informe a data limite da repetição" }, 400);
     }
@@ -109,7 +140,7 @@ export async function POST(req: NextRequest) {
       return json({ error: "A data limite deve ser depois do início" }, 400);
     }
 
-    const occ = buildOccurrences(startAt, endAt, repeat, until);
+    const occ = buildOccurrences(startAt, seriesEnd, repeat, until);
     if (occ.length === 0) {
       return json({ error: "Nenhuma ocorrência no período informado" }, 400);
     }
