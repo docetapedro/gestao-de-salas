@@ -975,6 +975,17 @@ function Resumo({
   const totalFormacoes = formacoes.length;
   const totalTurmas = formacoes.reduce((s, f) => s + f.turmas.length, 0);
 
+  // Execução do plano:
+  //  - planeadas  = formações que já têm ≥1 turma;
+  //  - realizadas = formações com ≥1 turma concluída.
+  const formacoesPlaneadas = formacoes.filter((f) => f.turmas.length > 0).length;
+  const formacoesRealizadas = formacoes.filter((f) =>
+    f.turmas.some((t) => t.estado === "CONCLUIDO")
+  ).length;
+  const pctExecucao = formacoesPlaneadas
+    ? Math.round((formacoesRealizadas / formacoesPlaneadas) * 100)
+    : 0;
+
   const conta = (fn: (i: Inscricao) => string | null) => {
     const m = new Map<string, number>();
     for (const i of inscricoes) {
@@ -1001,6 +1012,29 @@ function Resumo({
         <Kpi label="Formações" value={totalFormacoes} />
         <Kpi label="Turmas" value={totalTurmas} />
       </div>
+
+      <Card>
+        <CardContent className="py-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-slate-700">
+                Execução do plano interno
+              </div>
+              <div className="text-xs text-slate-500">
+                {formacoesRealizadas} de {formacoesPlaneadas} formações
+                planeadas realizadas (com turma concluída)
+              </div>
+            </div>
+            <div className="text-4xl font-bold text-navy">{pctExecucao}%</div>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-slate-100">
+            <div
+              className="h-2 rounded-full bg-brand-500 transition-all"
+              style={{ width: `${pctExecucao}%` }}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="py-4">
