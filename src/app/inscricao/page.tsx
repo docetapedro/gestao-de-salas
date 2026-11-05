@@ -76,18 +76,23 @@ export default function InscricaoWorkshopPage() {
           className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100"
         >
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-semibold text-slate-700">Nome</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">
+              Nome <span className="text-red-500">*</span>
+            </label>
             <input
               className={inputCls}
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               placeholder="O seu nome completo"
               autoComplete="name"
+              required
             />
           </div>
 
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-semibold text-slate-700">Email</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">
+              Email <span className="text-red-500">*</span>
+            </label>
             <input
               className={inputCls}
               type="email"
@@ -96,11 +101,14 @@ export default function InscricaoWorkshopPage() {
               placeholder="nome@exemplo.com"
               autoComplete="email"
               inputMode="email"
+              required
             />
           </div>
 
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-semibold text-slate-700">Telefone</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">
+              Telefone <span className="text-red-500">*</span>
+            </label>
             <input
               className={inputCls}
               type="tel"
@@ -109,6 +117,7 @@ export default function InscricaoWorkshopPage() {
               placeholder="+244 900 000 000"
               autoComplete="tel"
               inputMode="tel"
+              required
             />
           </div>
 
