@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import QRCodeLib from "qrcode";
 import { api } from "@/lib/api";
 import { CalendarDays, CheckCircle2, Loader2, MapPin } from "lucide-react";
 
@@ -47,12 +48,24 @@ export default function InscricaoPublicaPage({
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [feito, setFeito] = useState(false);
+  const [qr, setQr] = useState("");
 
   useEffect(() => {
     api<{ evento: Evento }>(`/api/public/inscricoes/${slug}`)
       .then((d) => setEvento(d.evento))
       .catch(() => setNaoEncontrado(true))
       .finally(() => setCarregando(false));
+  }, [slug]);
+
+  // QR Code do próprio link de inscrição (para outros digitalizarem).
+  useEffect(() => {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/inscricao/${slug}`
+        : `/inscricao/${slug}`;
+    QRCodeLib.toDataURL(url, { width: 512, margin: 1 })
+      .then(setQr)
+      .catch(() => setQr(""));
   }, [slug]);
 
   async function submeter(e: React.FormEvent) {
@@ -219,6 +232,20 @@ export default function InscricaoPublicaPage({
               Cada email e telefone só pode ser inscrito uma vez neste evento.
             </p>
           </form>
+        )}
+
+        {qr && (
+          <div className="mt-6 flex flex-col items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qr}
+              alt="QR Code de inscrição"
+              className="h-32 w-32 rounded-xl border border-slate-200 bg-white p-1.5"
+            />
+            <p className="text-center text-xs text-slate-400">
+              Partilhe este QR Code para outras pessoas se inscreverem.
+            </p>
+          </div>
         )}
       </div>
     </div>
