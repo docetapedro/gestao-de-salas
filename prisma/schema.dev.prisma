@@ -846,3 +846,18 @@ model MapaFormacao {
   @@index([dataInicio])
   @@index([cliente])
 }
+
+// --------------------------- Inscrições em Workshop -------------------------
+// Formulário público de inscrição num workshop (sem login — ver /inscricao).
+// Email e telefone são ÚNICOS: cada pessoa inscreve-se uma só vez. Os dados
+// ficam acessíveis na área de administração (módulo "inscricoes").
+model WorkshopInscricao {
+  id        String   @id @default(cuid())
+  nome      String
+  email     String   @unique
+  telefone  String   @unique
+  tema      String   @default("Inteligência Artificial no Mundo Corporativo")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
