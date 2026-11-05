@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FileDown, Search, Trash2, Users } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  FileDown,
+  QrCode,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
+import QRCodeLib from "qrcode";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +48,36 @@ export default function InscricoesPage() {
   const [q, setQ] = useState("");
   const [del, setDel] = useState<Inscricao | null>(null);
   const [busyDel, setBusyDel] = useState(false);
+
+  // QR Code do formulário público de inscrição.
+  const [mostrarQr, setMostrarQr] = useState(false);
+  const [qr, setQr] = useState("");
+  const [copiado, setCopiado] = useState(false);
+
+  const urlPublica =
+    typeof window !== "undefined" ? `${window.location.origin}/inscricao` : "/inscricao";
+
+  useEffect(() => {
+    // Alta resolução para impressão/projeção (mostrado reduzido no ecrã).
+    QRCodeLib.toDataURL(urlPublica, { width: 1024, margin: 1 })
+      .then(setQr)
+      .catch(() => setQr(""));
+  }, [urlPublica]);
+
+  function copiarLink() {
+    navigator.clipboard?.writeText(urlPublica).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1500);
+    });
+  }
+
+  function descarregarQr() {
+    if (!qr) return;
+    const a = document.createElement("a");
+    a.href = qr;
+    a.download = "qr-inscricao-workshop.png";
+    a.click();
+  }
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -115,11 +155,69 @@ export default function InscricoesPage() {
             {total === 1 ? "inscrito" : "inscritos"}
           </p>
         </div>
-        <Button variant="outline" onClick={exportarCsv} className="gap-2">
-          <FileDown className="h-4 w-4" />
-          Exportar CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setMostrarQr((v) => !v)}
+            className="gap-2"
+          >
+            <QrCode className="h-4 w-4" />
+            QR Code
+          </Button>
+          <Button variant="outline" onClick={exportarCsv} className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Exportar CSV
+          </Button>
+        </div>
       </div>
+
+      {mostrarQr && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-center">
+            {qr ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={qr}
+                alt="QR Code do formulário de inscrição"
+                className="h-48 w-48 shrink-0 rounded-xl border border-slate-200"
+              />
+            ) : (
+              <div className="flex h-48 w-48 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-300">
+                <QrCode className="h-10 w-10" />
+              </div>
+            )}
+            <div className="w-full">
+              <h2 className="text-base font-semibold text-navy">
+                QR Code das inscrições
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Imprime, projeta ou partilha este código. Ao digitalizá-lo, os
+                participantes abrem o formulário público e inscrevem-se — sem login.
+              </p>
+              <div className="mt-3 flex w-full items-center gap-2">
+                <input
+                  readOnly
+                  value={urlPublica}
+                  className="h-9 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs text-slate-600 outline-none"
+                />
+                <Button size="sm" variant="outline" onClick={copiarLink} title="Copiar link">
+                  {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                variant="navy"
+                className="mt-2 gap-2"
+                onClick={descarregarQr}
+                disabled={!qr}
+              >
+                <Download className="h-4 w-4" />
+                Descarregar PNG
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="relative max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
