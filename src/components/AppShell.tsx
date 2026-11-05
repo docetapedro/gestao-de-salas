@@ -86,7 +86,7 @@ const NAV: NavItem[] = [
     Icon: ClipboardListIcon,
     children: [
       { href: "/lista-presenca", label: "Lista de Presença", modulo: "projetos" },
-      { href: "/inscricoes", label: "Inscrições Workshop", modulo: "inscricoes" },
+      { href: "/inscricoes", label: "Eventos de Inscrição", modulo: "inscricoes" },
     ],
   },
   {

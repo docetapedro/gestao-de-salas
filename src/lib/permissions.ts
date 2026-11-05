@@ -32,7 +32,7 @@ export const MODULOS: { key: ModuloKey; label: string }[] = [
   { key: "indicadores", label: "Indicadores Qualidade" },
   { key: "performance", label: "Indicadores Performance" },
   { key: "mapa-formacoes", label: "Mapa de Formações" },
-  { key: "inscricoes", label: "Inscrições Workshop" },
+  { key: "inscricoes", label: "Eventos de Inscrição" },
   { key: "cadastros", label: "Cadastros" },
   { key: "usuarios", label: "Utilizadores" },
 ];

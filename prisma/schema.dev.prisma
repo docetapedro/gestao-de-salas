@@ -847,17 +847,39 @@ model MapaFormacao {
   @@index([cliente])
 }
 
-// --------------------------- Inscrições em Workshop -------------------------
-// Formulário público de inscrição num workshop (sem login — ver /inscricao).
-// Email e telefone são ÚNICOS: cada pessoa inscreve-se uma só vez. Os dados
-// ficam acessíveis na área de administração (módulo "inscricoes").
-model WorkshopInscricao {
-  id        String   @id @default(cuid())
-  nome      String
-  email     String   @unique
-  telefone  String   @unique
-  tema      String   @default("Inteligência Artificial no Mundo Corporativo")
-  createdAt DateTime @default(now())
+// --------------------------- Eventos de Inscrição ---------------------------
+// Módulo "inscricoes": o utilizador cria eventos (workshop, palestra, formação…)
+// e cada um gera um link público único (/inscricao/<slug>) + QR Code para
+// partilhar. Os participantes inscrevem-se SEM login. Email e telefone são
+// únicos POR EVENTO (a mesma pessoa pode inscrever-se em eventos diferentes,
+// mas não duas vezes no mesmo).
+model EventoInscricao {
+  id         String    @id @default(cuid())
+  tipo       String    @default("Workshop") // Workshop, Palestra, Formação…
+  titulo     String
+  descricao  String?
+  local      String?
+  dataInicio DateTime? // data e hora de início
+  slug       String    @unique // identificador do link público
+  ativo      Boolean   @default(true) // aceita inscrições?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  inscricoes Inscricao[]
 
   @@index([createdAt])
+}
+
+model Inscricao {
+  id        String          @id @default(cuid())
+  eventoId  String
+  evento    EventoInscricao @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  nome      String
+  email     String
+  telefone  String
+  createdAt DateTime        @default(now())
+
+  @@unique([eventoId, email])
+  @@unique([eventoId, telefone])
+  @@index([eventoId])
 }
